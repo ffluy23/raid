@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../css/style.css">
+  <title>Double Battle Room 1</title>
+  <style>
+    .team-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .team {
+      flex: 1;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .team-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 8px;
+      letter-spacing: .1em;
+    }
+    .player-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      margin: 5px 0;
+    }
+    .ready-icon { font-size: 14px; }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    #spectator-list {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #888;
+    }
+    @media (max-width: 480px) {
+      .team-box { flex-direction: column; }
+      .btn-row  { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">ZENITH RING</div>
+  </div>
+  <div class="screen">
+    <div class="screen-top">
+      <span>DOUBLE v1.0</span>
+      <div class="status">ONLINE</div>
+      <div class="battery"><div class="battery-level"></div></div>
+    </div>
+
+    <h2>Double Battle Room 1</h2>
+
+    <div class="team-box">
+      <div class="team">
+        <div class="team-label">🔵 TEAM A</div>
+        <div class="player-row">
+          <span id="player1">Player1: 대기 중...</span>
+          <span class="ready-icon" id="player1-ready">⬜</span>
+        </div>
+        <div class="player-row">
+          <span id="player2">Player2: 대기 중...</span>
+          <span class="ready-icon" id="player2-ready">⬜</span>
+        </div>
+      </div>
+      <div class="team">
+        <div class="team-label">🔴 TEAM B</div>
+        <div class="player-row">
+          <span id="player3">Player3: 대기 중...</span>
+          <span class="ready-icon" id="player3-ready">⬜</span>
+        </div>
+        <div class="player-row">
+          <span id="player4">Player4: 대기 중...</span>
+          <span class="ready-icon" id="player4-ready">⬜</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="readyBtn">Ready</button>
+      <button class="btn" id="swapBtn" style="display:none">자리 이동</button>
+      <button class="btn" id="leaveBtn">Leave</button>
+    </div>
+
+    <div id="spectator-list">관전자 없음</div>
+  </div>
+  <div class="footer">Made by Sonnet with Ampharos</div>
+</div>
+
+<script>const ROOM_ID = "doublebattleroom1"</script>
+<script type="module" src="../js/doublebattleroom.js"></script>
+</body>
+</html>
