@@ -9,7 +9,6 @@ import { josa } from "./effecthandler.js"
 
 window.__moves = moves
 
-// ── Firebase Functions 연결 ──────────────────────
 const API = "https://pokedouble-eosin.vercel.app/api"
 
 async function callApi(endpoint, data) {
