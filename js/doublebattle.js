@@ -11,6 +11,14 @@ window.__moves = moves
 
 const API = "https://pokedouble-eosin.vercel.app/api"
 
+// ── 효과음 ───────────────────────────────────────
+const SFX_DICE = "https://slippery-copper-mzpmcmc2ra.edgeone.app/soundreality-bicycle-bell-155622.mp3"
+const SFX_BTN  = "https://usual-salmon-mnqxptwyvw.edgeone.app/Pokemon%20(A%20Button)%20-%20Sound%20Effect%20(HD)%20(1)%20(1).mp3"
+
+function playSound(url) {
+  const a = new Audio(url); a.volume = 0.6; a.play().catch(() => {})
+}
+
 async function callApi(endpoint, data) {
   const res = await fetch(`${API}/${endpoint}`, {
     method: "POST",
@@ -46,10 +54,9 @@ let renderedSyncLogs = new Set()
 let isSpectator = new URLSearchParams(location.search).get("spectator") === "true"
 
 // ── 로그 큐 시스템 ───────────────────────────────
-// 서버가 쓴 로그를 타입별로 순서대로 재생
-let logQueue      = []   // { type, text, meta, ts }
+let logQueue      = []
 let isProcessing  = false
-let pendingRoomData = null  // 로그 재생 끝난 후 반영할 Firestore 데이터
+let pendingRoomData = null
 
 // ── 타입 컬러 ────────────────────────────────────
 const TYPE_COLORS = {
@@ -119,9 +126,7 @@ function updatePortrait(prefix, pokemon) {
   setTimeout(() => img.classList.add("visible"), 60)
 }
 
-// ── 슬롯 UI 갱신 (HP 바는 로그 큐 통해서만) ──────
-// isHpFromLog=true 면 HP 바도 같이 업데이트 (로그 큐에서 호출)
-// isHpFromLog=false 면 이름/포트레이트만 업데이트
+// ── 슬롯 UI 갱신 ──────────────────────────────────
 function updateSlotUI(slot, data, isHpFromLog = false) {
   const prefix = slotToPrefix(slot)
   if(!prefix) return
@@ -149,8 +154,6 @@ async function handleLogEntry(entry) {
   const logEl = $("battle-log")
 
   switch(type) {
-
-    // ① 일반 텍스트
     case "normal":
     case "after_hit": {
       if(!text) break
@@ -158,23 +161,17 @@ async function handleLogEntry(entry) {
       await wait(120)
       break
     }
-
-    // ② 기술명 선언 — 텍스트만 (약간 굵게 표시 가능)
     case "move_announce": {
       if(!text) break
       await typeText(logEl, text)
       await wait(200)
       break
     }
-
-    // ③ 주사위 애니메이션
     case "dice": {
       if(!meta) break
       await animateAttackDice(meta.slot, meta.roll)
       break
     }
-
-    // ④ hit — 넉백 이펙트 + blink
     case "hit": {
       if(!meta?.defender) break
       const prefix = slotToPrefix(meta.defender)
@@ -184,36 +181,26 @@ async function handleLogEntry(entry) {
       }
       break
     }
-
-    // ⑤ HP 바 업데이트
     case "hp": {
       if(!meta?.slot) break
       const prefix = slotToPrefix(meta.slot)
       if(!prefix) break
       const isMyTeam = prefix === "my" || prefix === "ally"
-      // 애니메이션: 부드럽게 줄어드는 효과
       await animateHpBar(prefix, meta.hp, meta.maxHp, isMyTeam)
       if(text) await typeText(logEl, text)
       await wait(100)
       break
     }
-
-    // ⑥ ASSIST! 애니메이션
     case "assist": {
       await showAssistAnimation()
       break
     }
-
-    // ⑦ SYNCHRONIZE! 애니메이션
     case "sync": {
       await showSyncAnimation()
       break
     }
-
-    // ⑧ 기절 로그
     case "faint": {
       if(text) await typeText(logEl, text)
-      // 기절 포켓몬 이미지 흐리게
       if(meta?.slot) {
         const prefix = slotToPrefix(meta.slot)
         const area   = $(`${prefix}-pokemon-area`)
@@ -222,7 +209,6 @@ async function handleLogEntry(entry) {
       await wait(300)
       break
     }
-
     default: {
       if(text) await typeText(logEl, text)
       break
@@ -250,7 +236,6 @@ function typeText(logEl, text) {
 // ── 로그 큐 처리 ─────────────────────────────────
 function enqueueLogs(entries) {
   entries.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
-  // type 없는 옛날 로그도 normal로 처리 (startRound 등 하위 호환)
   entries.forEach(e => { if(!e.type) e.type = "normal" })
   logQueue.push(...entries)
   processLogQueue()
@@ -259,12 +244,10 @@ function enqueueLogs(entries) {
 async function processLogQueue() {
   if(isProcessing) return
   if(logQueue.length === 0) {
-    // 큐가 완전히 빌 때 pendingRoomData 반영
     if(pendingRoomData) {
       const data = pendingRoomData
       pendingRoomData = null
       setTimeout(async () => {
-        // 로그 다 끝난 후 dice_event 있으면 주사위 먼저
         if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
           lastDiceEventTs = data.dice_event.ts
           await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
@@ -282,29 +265,22 @@ async function processLogQueue() {
     console.warn("logEntry 처리 오류:", e)
   }
   isProcessing = false
-  // 엔트리 사이 간격 (너무 짧으면 버튼 상태 갱신 타이밍 꼬임)
   setTimeout(processLogQueue, 50)
 }
 
-// ── HP 바 애니메이션 (부드럽게) ──────────────────
+// ── HP 바 애니메이션 ──────────────────────────────
 function animateHpBar(prefix, targetHp, maxHp, showNum) {
   return new Promise(resolve => {
     const bar = $(`${prefix}-hp-bar`)
     const txt = $(`${prefix}-active-hp`)
     if(!bar) { resolve(); return }
-
     const targetPct = maxHp > 0 ? Math.max(0, Math.min(100, targetHp / maxHp * 100)) : 0
     const color = targetPct > 50 ? "#4caf50" : targetPct > 20 ? "#ff9800" : "#f44336"
-
     bar.style.transition = "width 0.4s ease, background-color 0.4s ease"
     bar.style.width      = targetPct + "%"
     bar.style.backgroundColor = color
     if(txt && showNum) txt.innerText = `HP: ${targetHp} / ${maxHp}`
-
-    setTimeout(() => {
-      bar.style.transition = ""
-      resolve()
-    }, 420)
+    setTimeout(() => { bar.style.transition = ""; resolve() }, 420)
   })
 }
 
@@ -330,7 +306,6 @@ function triggerBlink(prefix) {
   return new Promise(resolve => {
     const area = $(`${prefix}-pokemon-area`)
     if(!area) { resolve(); return }
-    // 포트레이트 wrap과 hp-card만 깜빡이도록 타겟 지정
     const targets = [
       area.querySelector(".portrait-wrap"),
       area.querySelector(".hp-card")
@@ -368,6 +343,7 @@ function animateAttackDice(slot, finalRoll) {
         clearInterval(iv)
         diceEl.innerText = finalRoll
         diceEl.classList.remove("pop"); void diceEl.offsetWidth; diceEl.classList.add("pop")
+        playSound(SFX_DICE)  // 주사위 확정 효과음
         setTimeout(() => { wrap.style.display = "none"; resolve() }, 900)
       }
     }, 55)
@@ -401,6 +377,7 @@ function animateRoundDice(rolls, slots) {
             el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop")
           }
         })
+        playSound(SFX_DICE)  // 라운드 주사위 확정 효과음
         setTimeout(() => { wrap.style.display = "none"; resolve() }, 1600)
       }
     }, 60)
@@ -438,8 +415,6 @@ function updateMoveButtons(data) {
   const fainted     = !myPokemon || myPokemon.hp <= 0
   const movesArr    = myPokemon?.moves ?? []
 
-
-
   for(let i = 0; i < 4; i++) {
     const btn = $(`move-btn-${i}`)
     if(!btn) continue
@@ -462,7 +437,7 @@ function updateMoveButtons(data) {
 
     const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone
     btn.disabled = !canUse
-    btn.onclick  = canUse ? () => onMoveClick(i, moveInfo, data) : null
+    btn.onclick  = canUse ? () => { playSound(SFX_BTN); onMoveClick(i, moveInfo, data) } : null
   }
 }
 
@@ -507,6 +482,7 @@ function enterTargetMode(idx, data, { targetsEnemy = true, targetsAlly = false }
     if(!area) return
     area.classList.add("target-selectable")
     area.onclick = () => {
+      playSound(SFX_BTN)
       const capturedIdx = pendingMoveIdx
       exitTargetMode()
       doUseMove(capturedIdx, [eSlot], data)
@@ -566,10 +542,10 @@ function updateBenchButtons(data) {
       } else if(isForcedSwitch) {
         btn.disabled = false
         btn.classList.add("forced-switch")
-        btn.onclick  = () => doForcedSwitch(idx)
+        btn.onclick  = () => { playSound(SFX_BTN); doForcedSwitch(idx) }
       } else {
         btn.disabled = !myTurn || actionDone
-        if(!btn.disabled) btn.onclick = () => doSwitchPokemon(idx, data)
+        if(!btn.disabled) btn.onclick = () => { playSound(SFX_BTN); doSwitchPokemon(idx, data) }
       }
     }
     bench.appendChild(btn)
@@ -670,6 +646,7 @@ function updateAssistUI(data) {
       reqBtn.disabled = true; reqBtn.innerText = "요청 중..."
     } else {
       reqBtn.disabled = false; reqBtn.innerText = "지원 요청"
+      reqBtn.onclick = () => { playSound(SFX_BTN); doRequestAssist() }
     }
   }
 
@@ -686,7 +663,6 @@ function updateAssistUI(data) {
 
   const popup = $("assist-popup")
   if(popup) {
-    // 내 포켓몬 기절 상태면 수락 불가 (팝업 숨김)
     const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
     const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
     const myFainted = !myActivePkmn || myActivePkmn.hp <= 0
@@ -719,6 +695,7 @@ function updateSyncUI(data) {
       reqBtn.disabled = true; reqBtn.innerText = "요청 중..."
     } else {
       reqBtn.disabled = false; reqBtn.innerText = "동기화 요청"
+      reqBtn.onclick = () => { playSound(SFX_BTN); doRequestSync() }
     }
   }
 
@@ -734,7 +711,6 @@ function updateSyncUI(data) {
 
   const popup = $("sync-popup")
   if(popup) {
-    // 내 포켓몬 기절 상태면 수락 불가 (팝업 숨김)
     const myActiveIdx2 = data[`${mySlot}_active_idx`] ?? 0
     const myActivePkmn2 = data[`${mySlot}_entry`]?.[myActiveIdx2]
     const myFainted2 = !myActivePkmn2 || myActivePkmn2.hp <= 0
@@ -747,7 +723,6 @@ function updateSyncUI(data) {
     }
   }
 
-  // sync_log 처리도 logQueue로
   const myTeamKey = `sync_log_${myTeam}`
   const syncLog   = data[myTeamKey]
   if(syncLog && !renderedSyncLogs.has(syncLog)) {
@@ -791,7 +766,6 @@ async function doSkipTurn() {
 }
 
 // ── Firestore 데이터를 UI에 실제 반영 ────────────
-// 로그 큐가 비었을 때 호출 (HP는 이미 로그 큐 통해 반영됨)
 function applyRoomData(data) {
   ;["p1","p2","p3","p4"].forEach(s => updateSlotUI(s, data, false))
   updateOrderDisplay(data)
@@ -815,7 +789,7 @@ function applyRoomData(data) {
   }
 }
 
-// ── listenLogs: 새 로그 감지 → 큐에 추가 ────────
+// ── listenLogs ────────────────────────────────────
 function listenLogs(gameStartedAt) {
   const q = query(logsRef, orderBy("ts"))
   onSnapshot(q, snap => {
@@ -831,9 +805,7 @@ function listenLogs(gameStartedAt) {
   })
 }
 
-// ── listenRoom: Firestore 변경 감지 ─────────────
-// 턴 상태(myTurn/actionDone)는 즉시 세팅 -> 버튼이 로그 재생 중에도 풀림
-// HP/포트레이트 등 무거운 UI는 큐 끝난 후 applyRoomData에서 처리
+// ── listenRoom ────────────────────────────────────
 let lastDiceEventTs = 0
 
 function listenRoom() {
@@ -841,7 +813,6 @@ function listenRoom() {
     const data = snap.data()
     if(!data || !data.p1_entry) return
 
-    // 턴 상태 즉시 세팅 (UI 렌더링과 분리)
     if(!isSpectator && !data.game_over) {
       const order   = data.current_order ?? []
       const pending = data.pending_switches ?? []
@@ -850,14 +821,12 @@ function listenRoom() {
       myTurn = isMyTurnNow
       if(!wasMyTurn && isMyTurnNow) actionDone = false
       if(pending.includes(mySlot))  actionDone = false
-      // 내 턴인데 포켓몬 전멸 -> skipTurn
+
       if(myTurn && !actionDone) {
         const myEntry = data[`${mySlot}_entry`] ?? []
         if(myEntry.every(p => p.hp <= 0)) {
           actionDone = true; doSkipTurn()
-        }
-        // 참기/구르기 중이면 자동으로 useMove 호출
-        else {
+        } else {
           const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
           const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
           if(myActivePkmn?.bideState || myActivePkmn?.rollState?.active) {
@@ -867,26 +836,24 @@ function listenRoom() {
           }
         }
       }
-      // 라운드 시작 트리거
-      if(order.length === 0 && pending.length === 0 && data.game_started) {
+
+      // ── 라운드 시작 트리거: intro_done이 true일 때만 ──
+      if(order.length === 0 && pending.length === 0 && data.game_started && data.intro_done) {
         tryStartRound()
       }
     }
 
-    // 라운드 시작 주사위: 로그 큐가 빈 후에 실행
     if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
       if(!isProcessing && logQueue.length === 0) {
         lastDiceEventTs = data.dice_event.ts
         await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
         applyRoomData(data)
       } else {
-        // 로그 재생 중이면 pending으로 저장 (큐 끝나고 applyRoomData에서 처리)
         pendingRoomData = data
       }
       return
     }
 
-    // UI 렌더링: 로그 큐 비어있으면 바로, 재생 중이면 pending
     if(!isProcessing && logQueue.length === 0) {
       applyRoomData(data)
     } else {
@@ -916,10 +883,12 @@ async function doRequestAssist() {
   catch(e) { alert(`어시스트 요청 실패: ${e.message}`) }
 }
 async function doAcceptAssist() {
+  playSound(SFX_BTN)
   try { await _acceptAssist({ roomId: ROOM_ID, mySlot }) }
   catch(e) { alert(`수락 실패: ${e.message}`) }
 }
 async function doRejectAssist() {
+  playSound(SFX_BTN)
   try { await _rejectAssist({ roomId: ROOM_ID }) }
   catch(e) { console.warn("거절 실패:", e.message) }
 }
@@ -931,10 +900,12 @@ async function doRequestSync() {
   catch(e) { alert(`동기화 요청 실패: ${e.message}`) }
 }
 async function doAcceptSync() {
+  playSound(SFX_BTN)
   try { await _acceptSync({ roomId: ROOM_ID, mySlot }) }
   catch(e) { alert(`수락 실패: ${e.message}`) }
 }
 async function doRejectSync() {
+  playSound(SFX_BTN)
   try { await _rejectSync({ roomId: ROOM_ID }) }
   catch(e) { console.warn("거절 실패:", e.message) }
 }

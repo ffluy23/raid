@@ -226,7 +226,7 @@ async function startBattle() {
 
   // p1만 game_started_at 기록 (채팅 필터 기준점)
   if (mySlot === "p1") {
-    await updateDoc(roomRef, { game_started_at: Date.now() })
+    await updateDoc(roomRef, { game_started_at: Date.now(), intro_done: true })
   }
 
   setTimeout(() => {
