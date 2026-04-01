@@ -9,7 +9,6 @@ import { josa } from "./effecthandler.js"
 
 window.__moves = moves
 
-
 const API = "https://pokedouble-eosin.vercel.app/api"
 
 async function callApi(endpoint, data) {
@@ -42,18 +41,15 @@ const logsRef = collection(db, "double", ROOM_ID, "logs")
 // ── 상태 변수 ────────────────────────────────────
 let mySlot = null, myUid = null
 let myTurn = false, actionDone = false, gameOver = false
-let lastDiceEventTs    = 0
-let lastHitEventTs     = 0
-let lastAttackDiceTs   = 0
-let lastAssistEventTs  = 0
-let lastSyncEventTs    = 0
-let renderedLogIds     = new Set()
-let renderedSyncLogs   = new Set()
-let typingQueue = [], isTyping = false
-let pendingMoveIdx = -1
-let isHandlingSnapshot = false
+let renderedLogIds  = new Set()
+let renderedSyncLogs = new Set()
+let isSpectator = new URLSearchParams(location.search).get("spectator") === "true"
 
-const isSpectator = new URLSearchParams(location.search).get("spectator") === "true"
+// ── 로그 큐 시스템 ───────────────────────────────
+// 서버가 쓴 로그를 타입별로 순서대로 재생
+let logQueue      = []   // { type, text, meta, ts }
+let isProcessing  = false
+let pendingRoomData = null  // 로그 재생 끝난 후 반영할 Firestore 데이터
 
 // ── 타입 컬러 ────────────────────────────────────
 const TYPE_COLORS = {
@@ -66,6 +62,7 @@ const TYPE_COLORS = {
 // ── 유틸 ─────────────────────────────────────────
 function $(id) { return document.getElementById(id) }
 function rollD10() { return Math.floor(Math.random() * 10) + 1 }
+function wait(ms) { return new Promise(r => setTimeout(r, ms)) }
 
 function teamOf(s)       { return ["p1","p2"].includes(s) ? "A" : "B" }
 function allyOf(s)       { return s==="p1"?"p2":s==="p2"?"p1":s==="p3"?"p4":"p3" }
@@ -79,9 +76,6 @@ function isTeamAllDead(data) {
   return myEntry.every(p => p.hp <= 0) && allyEntry.every(p => p.hp <= 0)
 }
 
-// 어시스트/싱크로 요청 불가 조건:
-// - 내 active 포켓몬 hp <= 0  이거나
-// - 아군이 pending_switches에 있음 (교체 대기 중)
 function cannotRequestSupport(data) {
   if(!mySlot) return true
   const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
@@ -125,8 +119,10 @@ function updatePortrait(prefix, pokemon) {
   setTimeout(() => img.classList.add("visible"), 60)
 }
 
-// ── 슬롯 UI 갱신 ─────────────────────────────────
-function updateSlotUI(slot, data) {
+// ── 슬롯 UI 갱신 (HP 바는 로그 큐 통해서만) ──────
+// isHpFromLog=true 면 HP 바도 같이 업데이트 (로그 큐에서 호출)
+// isHpFromLog=false 면 이름/포트레이트만 업데이트
+function updateSlotUI(slot, data, isHpFromLog = false) {
   const prefix = slotToPrefix(slot)
   if(!prefix) return
   const activeIdx = data[`${slot}_active_idx`] ?? 0
@@ -141,93 +137,197 @@ function updateSlotUI(slot, data) {
   if(nameEl) nameEl.innerText = pokemon.name ?? "???"
 
   const isMyTeam = prefix === "my" || prefix === "ally"
-  updateHpBar(`${prefix}-hp-bar`, `${prefix}-active-hp`, pokemon.hp, pokemon.maxHp, isMyTeam)
+  if(isHpFromLog) {
+    updateHpBar(`${prefix}-hp-bar`, `${prefix}-active-hp`, pokemon.hp, pokemon.maxHp, isMyTeam)
+  }
   updatePortrait(prefix, pokemon)
 }
 
-// ── 행동 순서 표시 ───────────────────────────────
-function updateOrderDisplay(data) {
-  const el = $("order-display")
-  if(!el) return
-  const order = data.current_order ?? []
-  if(order.length === 0) { el.innerHTML = ""; return }
+// ── 로그 큐: 타입별 핸들러 ──────────────────────
+async function handleLogEntry(entry) {
+  const { type, text, meta } = entry
+  const logEl = $("battle-log")
 
-  el.innerHTML = order.map((slot, i) => {
-    const slotKey = slot.replace("p", "player")
-    const name    = (data[`${slotKey}_name`] ?? slot).split("]").pop().trim()
-    const isActive = i === 0
-    const isMine   = slot === mySlot
-    let cls = "order-item"
-    if(isActive) cls += " active"
-    else if(isMine) cls += " mine"
-    return `<div class="${cls}">${i+1}. ${name}</div>`
-  }).join("")
-}
+  switch(type) {
 
-// ── 타이핑 로그 ─────────────────────────────────
-function processQueue() {
-  if(isTyping || typingQueue.length === 0) return
-  isTyping = true
-  const { text } = typingQueue.shift()
-  const log = $("battle-log")
-  if(!log) { isTyping = false; processQueue(); return }
-  const line = document.createElement("p")
-  log.appendChild(line)
-  const chars = [...text]; let i = 0
-  function typeNext() {
-    if(i >= chars.length) { isTyping = false; setTimeout(processQueue, 80); return }
-    line.textContent += chars[i++]
-    log.scrollTop = log.scrollHeight
-    setTimeout(typeNext, 18)
+    // ① 일반 텍스트
+    case "normal":
+    case "after_hit": {
+      if(!text) break
+      await typeText(logEl, text)
+      await wait(120)
+      break
+    }
+
+    // ② 기술명 선언 — 텍스트만 (약간 굵게 표시 가능)
+    case "move_announce": {
+      if(!text) break
+      await typeText(logEl, text)
+      await wait(200)
+      break
+    }
+
+    // ③ 주사위 애니메이션
+    case "dice": {
+      if(!meta) break
+      await animateAttackDice(meta.slot, meta.roll)
+      break
+    }
+
+    // ④ hit — 넉백 이펙트 + blink
+    case "hit": {
+      if(!meta?.defender) break
+      const prefix = slotToPrefix(meta.defender)
+      if(prefix) {
+        await triggerAttackEffect(prefix)
+        await triggerBlink(prefix)
+      }
+      break
+    }
+
+    // ⑤ HP 바 업데이트
+    case "hp": {
+      if(!meta?.slot) break
+      const prefix = slotToPrefix(meta.slot)
+      if(!prefix) break
+      const isMyTeam = prefix === "my" || prefix === "ally"
+      // 애니메이션: 부드럽게 줄어드는 효과
+      await animateHpBar(prefix, meta.hp, meta.maxHp, isMyTeam)
+      if(text) await typeText(logEl, text)
+      await wait(100)
+      break
+    }
+
+    // ⑥ ASSIST! 애니메이션
+    case "assist": {
+      await showAssistAnimation()
+      break
+    }
+
+    // ⑦ SYNCHRONIZE! 애니메이션
+    case "sync": {
+      await showSyncAnimation()
+      break
+    }
+
+    // ⑧ 기절 로그
+    case "faint": {
+      if(text) await typeText(logEl, text)
+      // 기절 포켓몬 이미지 흐리게
+      if(meta?.slot) {
+        const prefix = slotToPrefix(meta.slot)
+        const area   = $(`${prefix}-pokemon-area`)
+        if(area) area.classList.add("fainted")
+      }
+      await wait(300)
+      break
+    }
+
+    default: {
+      if(text) await typeText(logEl, text)
+      break
+    }
   }
-  typeNext()
 }
 
-function listenLogs(gameStartedAt) {
-  const q = query(logsRef, orderBy("ts"))
-  onSnapshot(q, snap => {
-    snap.docs.forEach(d => {
-      if(renderedLogIds.has(d.id)) return
-      const logData = d.data()
-      if(gameStartedAt && logData.ts < gameStartedAt) return
-      renderedLogIds.add(d.id)
-      typingQueue.push({ text: logData.text })
-    })
-    processQueue()
+// ── 타이핑 텍스트 ────────────────────────────────
+function typeText(logEl, text) {
+  return new Promise(resolve => {
+    if(!logEl) { resolve(); return }
+    const line   = document.createElement("p")
+    logEl.appendChild(line)
+    const chars  = [...text]; let i = 0
+    function next() {
+      if(i >= chars.length) { logEl.scrollTop = logEl.scrollHeight; resolve(); return }
+      line.textContent += chars[i++]
+      logEl.scrollTop = logEl.scrollHeight
+      setTimeout(next, 18)
+    }
+    next()
+  })
+}
+
+// ── 로그 큐 처리 ─────────────────────────────────
+function enqueueLogs(entries) {
+  // ts 순 정렬 후 추가
+  entries.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+  logQueue.push(...entries)
+  processLogQueue()
+}
+
+async function processLogQueue() {
+  if(isProcessing) return
+  if(logQueue.length === 0) {
+    // 큐 비면 pendingRoomData 반영
+    if(pendingRoomData) {
+      const data = pendingRoomData
+      pendingRoomData = null
+      applyRoomData(data)
+    }
+    return
+  }
+  isProcessing = true
+  const entry = logQueue.shift()
+  try {
+    await handleLogEntry(entry)
+  } catch(e) {
+    console.warn("logEntry 처리 오류:", e)
+  }
+  isProcessing = false
+  setTimeout(processLogQueue, 40)
+}
+
+// ── HP 바 애니메이션 (부드럽게) ──────────────────
+function animateHpBar(prefix, targetHp, maxHp, showNum) {
+  return new Promise(resolve => {
+    const bar = $(`${prefix}-hp-bar`)
+    const txt = $(`${prefix}-active-hp`)
+    if(!bar) { resolve(); return }
+
+    const targetPct = maxHp > 0 ? Math.max(0, Math.min(100, targetHp / maxHp * 100)) : 0
+    const color = targetPct > 50 ? "#4caf50" : targetPct > 20 ? "#ff9800" : "#f44336"
+
+    bar.style.transition = "width 0.4s ease, background-color 0.4s ease"
+    bar.style.width      = targetPct + "%"
+    bar.style.backgroundColor = color
+    if(txt && showNum) txt.innerText = `HP: ${targetHp} / ${maxHp}`
+
+    setTimeout(() => {
+      bar.style.transition = ""
+      resolve()
+    }, 420)
+  })
+}
+
+// ── 히트 이펙트 ─────────────────────────────────
+function triggerAttackEffect(defPrefix) {
+  return new Promise(resolve => {
+    const defArea = $(`${defPrefix}-pokemon-area`)
+    const wrapper = $("battle-wrapper")
+    if(wrapper) {
+      wrapper.classList.remove("screen-shake"); void wrapper.offsetWidth
+      wrapper.classList.add("screen-shake")
+      wrapper.addEventListener("animationend", () => wrapper.classList.remove("screen-shake"), { once: true })
+    }
+    if(defArea) {
+      defArea.classList.remove("defender-hit"); void defArea.offsetWidth
+      defArea.classList.add("defender-hit")
+      defArea.addEventListener("animationend", () => { defArea.classList.remove("defender-hit"); resolve() }, { once: true })
+    } else resolve()
+  })
+}
+
+function triggerBlink(prefix) {
+  return new Promise(resolve => {
+    const area = $(`${prefix}-pokemon-area`)
+    if(!area) { resolve(); return }
+    area.classList.remove("blink-damage"); void area.offsetWidth
+    area.classList.add("blink-damage")
+    area.addEventListener("animationend", () => { area.classList.remove("blink-damage"); resolve() }, { once: true })
   })
 }
 
 // ── 주사위 애니메이션 ────────────────────────────
-function animateDice(rolls, slots, onDone) {
-  const wrap = $("dice-wrap")
-  if(!wrap) { onDone?.(); return }
-
-  ;["p1","p2","p3","p4"].forEach(s => {
-    const box = $(`dice-box-${s}`)
-    if(box) box.style.display = slots.includes(s) ? "block" : "none"
-  })
-
-  wrap.style.display = "flex"
-  let count = 0
-  const iv = setInterval(() => {
-    slots.forEach(s => {
-      const el = $(`dice-${s}`)
-      if(el) el.innerText = rollD10()
-    })
-    if(++count >= 20) {
-      clearInterval(iv)
-      slots.forEach(s => {
-        const el = $(`dice-${s}`)
-        if(el) {
-          el.innerText = rolls[s]
-          el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop")
-        }
-      })
-      setTimeout(() => { wrap.style.display = "none"; onDone?.() }, 1800)
-    }
-  }, 60)
-}
-
 function animateAttackDice(slot, finalRoll) {
   return new Promise(resolve => {
     const wrap   = $("dice-wrap")
@@ -247,41 +347,67 @@ function animateAttackDice(slot, finalRoll) {
         clearInterval(iv)
         diceEl.innerText = finalRoll
         diceEl.classList.remove("pop"); void diceEl.offsetWidth; diceEl.classList.add("pop")
-        setTimeout(() => { wrap.style.display = "none"; resolve() }, 1000)
+        setTimeout(() => { wrap.style.display = "none"; resolve() }, 900)
+      }
+    }, 55)
+  })
+}
+
+// 라운드 시작 주사위 (4명 동시)
+function animateRoundDice(rolls, slots) {
+  return new Promise(resolve => {
+    const wrap = $("dice-wrap")
+    if(!wrap) { resolve(); return }
+
+    ;["p1","p2","p3","p4"].forEach(s => {
+      const box = $(`dice-box-${s}`)
+      if(box) box.style.display = slots.includes(s) ? "block" : "none"
+    })
+
+    wrap.style.display = "flex"
+    let count = 0
+    const iv = setInterval(() => {
+      slots.forEach(s => {
+        const el = $(`dice-${s}`)
+        if(el) el.innerText = rollD10()
+      })
+      if(++count >= 20) {
+        clearInterval(iv)
+        slots.forEach(s => {
+          const el = $(`dice-${s}`)
+          if(el) {
+            el.innerText = rolls[s]
+            el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop")
+          }
+        })
+        setTimeout(() => { wrap.style.display = "none"; resolve() }, 1600)
       }
     }, 60)
   })
 }
 
-// ── 히트 이펙트 ─────────────────────────────────
-function triggerBlink(prefix) {
-  const area = $(`${prefix}-pokemon-area`)
-  if(!area) return
-
-  const wrapper = $("battle-wrapper")
-  if(wrapper) {
-    wrapper.classList.remove("screen-shake"); void wrapper.offsetWidth
-    wrapper.classList.add("screen-shake")
-    wrapper.addEventListener("animationend", () => wrapper.classList.remove("screen-shake"), { once: true })
-  }
-
-  const targets = [
-    area.querySelector(".portrait-wrap"),
-    area.querySelector(".hp-card")
-  ].filter(Boolean)
-
-  targets.forEach(el => {
-    el.classList.remove("blink-damage"); void el.offsetWidth
-    el.classList.add("blink-damage")
-    el.addEventListener("animationend", () => el.classList.remove("blink-damage"), { once: true })
+// ── ASSIST! 애니메이션 ───────────────────────────
+function showAssistAnimation() {
+  return new Promise(resolve => {
+    const el = $("assist-anim")
+    if(!el) { resolve(); return }
+    el.classList.remove("assist-show")
+    void el.offsetWidth
+    el.classList.add("assist-show")
+    setTimeout(resolve, 800)
   })
+}
 
-  const portrait = area.querySelector(".portrait-wrap")
-  if(portrait) {
-    portrait.classList.remove("defender-hit"); void portrait.offsetWidth
-    portrait.classList.add("defender-hit")
-    portrait.addEventListener("animationend", () => portrait.classList.remove("defender-hit"), { once: true })
-  }
+// ── SYNCHRONIZE! 애니메이션 ──────────────────────
+function showSyncAnimation() {
+  return new Promise(resolve => {
+    const el = $("sync-anim")
+    if(!el) { resolve(); return }
+    el.classList.remove("sync-show")
+    void el.offsetWidth
+    el.classList.add("sync-show")
+    setTimeout(resolve, 800)
+  })
 }
 
 // ── 기술 버튼 ────────────────────────────────────
@@ -317,20 +443,18 @@ function updateMoveButtons(data) {
   }
 }
 
-// ── 기술 클릭 → 타겟 선택 or 즉시 사용 ─────────
+// ── 기술 클릭 ────────────────────────────────────
+let pendingMoveIdx = -1
+
 function onMoveClick(idx, moveInfo, data) {
   if(actionDone) return
 
   const r = moveInfo?.rank
-
   const targetsEnemy =
     moveInfo?.power
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
-    || moveInfo?.roar
-    || moveInfo?.leechSeed
-    || moveInfo?.chainBind
-    || moveInfo?.dragonTail
-    || moveInfo?.healPulse
+    || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
+    || moveInfo?.dragonTail || moveInfo?.healPulse
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
 
   const targetsAlly = moveInfo?.healPulse
@@ -342,7 +466,6 @@ function onMoveClick(idx, moveInfo, data) {
   }
 }
 
-// ── 타겟 선택 모드 ───────────────────────────────
 function enterTargetMode(idx, data, { targetsEnemy = true, targetsAlly = false } = {}) {
   pendingMoveIdx = idx
   const hint = $("target-hint")
@@ -356,7 +479,6 @@ function enterTargetMode(idx, data, { targetsEnemy = true, targetsAlly = false }
     const eActiveIdx = data[`${eSlot}_active_idx`] ?? 0
     const ePkmn      = data[`${eSlot}_entry`]?.[eActiveIdx]
     if(!ePkmn || ePkmn.hp <= 0) return
-
     const prefix = slotToPrefix(eSlot)
     const area   = $(`${prefix}-pokemon-area`)
     if(!area) return
@@ -385,15 +507,8 @@ async function doUseMove(moveIdx, targetSlots, data) {
   if(actionDone) return
   actionDone = true
   updateMoveButtons(data)
-
-  const mv       = data[`${mySlot}_entry`]?.[data[`${mySlot}_active_idx`] ?? 0]?.moves?.[moveIdx]
-  const moveInfo = mv ? (window.__moves?.[mv.name] ?? {}) : {}
-  const isAttack = !!moveInfo.power
-
-  const diceRoll = isAttack && targetSlots.length > 0 ? rollD10() : null
-
   try {
-    await _useMove({ roomId: ROOM_ID, mySlot, moveIdx, targetSlots, diceRoll })
+    await _useMove({ roomId: ROOM_ID, mySlot, moveIdx, targetSlots })
   } catch(e) {
     console.error("useMove 오류:", e.message)
     actionDone = false
@@ -460,11 +575,28 @@ async function doForcedSwitch(newIdx) {
   }
 }
 
+// ── 행동 순서 표시 ───────────────────────────────
+function updateOrderDisplay(data) {
+  const el = $("order-display")
+  if(!el) return
+  const order = data.current_order ?? []
+  if(order.length === 0) { el.innerHTML = ""; return }
+  el.innerHTML = order.map((slot, i) => {
+    const slotKey = slot.replace("p", "player")
+    const name    = (data[`${slotKey}_name`] ?? slot).split("]").pop().trim()
+    const isActive = i === 0
+    const isMine   = slot === mySlot
+    let cls = "order-item"
+    if(isActive) cls += " active"
+    else if(isMine) cls += " mine"
+    return `<div class="${cls}">${i+1}. ${name}</div>`
+  }).join("")
+}
+
 // ── 턴 표시 ──────────────────────────────────────
 function updateTurnUI(data) {
   const el = $("turn-display")
   if(!el) return
-
   const order   = data.current_order ?? []
   const pending = data.pending_switches ?? []
 
@@ -473,32 +605,125 @@ function updateTurnUI(data) {
       const s       = order[0]
       const slotKey = s.replace("p", "player")
       const name    = (data[`${slotKey}_name`] ?? s).split("]").pop().trim()
-      el.innerText  = `${name}의 턴`
-      el.style.color = "#333"
+      el.innerText  = `${name}의 턴`; el.style.color = "#333"
     } else {
-      el.innerText  = "라운드 대기 중..."
-      el.style.color = "#aaa"
+      el.innerText = "라운드 대기 중..."; el.style.color = "#aaa"
     }
     return
   }
 
   if(pending.includes(mySlot)) {
-    el.innerText  = "교체할 포켓몬을 선택!"
-    el.style.color = "#e67e22"
+    el.innerText = "교체할 포켓몬을 선택!"; el.style.color = "#e67e22"
   } else if(order.length === 0) {
-    el.innerText  = "라운드 대기 중..."
-    el.style.color = "#aaa"
+    el.innerText = "라운드 대기 중..."; el.style.color = "#aaa"
   } else if(order[0] === mySlot) {
-    el.innerText  = "내 턴!"
-    el.style.color = "green"
+    el.innerText = "내 턴!"; el.style.color = "green"
   } else {
-    const idx = order.indexOf(mySlot)
-    el.innerText  = idx > 0 ? `${idx}번째 대기중...` : "상대 턴..."
+    const idx    = order.indexOf(mySlot)
+    el.innerText = idx > 0 ? `${idx}번째 대기중...` : "상대 턴..."
     el.style.color = "gray"
   }
 
   const tc = $("turn-count")
   if(tc) tc.innerText = `${data.round_count ?? 0}라운드 / ${data.turn_count ?? 0}턴`
+}
+
+// ── 어시스트 UI ──────────────────────────────────
+function updateAssistUI(data) {
+  const myTeam   = teamOf(mySlot)
+  const assist   = data[`assist_team${myTeam}`] ?? null
+  const used     = data[`assist_used_${myTeam}`] ?? false
+  const req      = data.assist_request ?? null
+  const teamDead = isTeamAllDead(data)
+  const blocked  = cannotRequestSupport(data)
+
+  const reqBtn = $("assist-request-btn")
+  if(reqBtn) {
+    const isMyReq = req && req.from === mySlot
+    if(isSpectator || used || assist || teamDead || blocked) {
+      reqBtn.disabled  = true
+      reqBtn.innerText = teamDead ? "사용 불가" : assist ? "🤝 어시스트 중" : used ? "지원 완료" : blocked ? "요청 불가" : "지원 요청"
+    } else if(isMyReq) {
+      reqBtn.disabled = true; reqBtn.innerText = "요청 중..."
+    } else {
+      reqBtn.disabled = false; reqBtn.innerText = "지원 요청"
+    }
+  }
+
+  const statusEl = $("assist-status")
+  if(statusEl) {
+    if(assist?.requester === mySlot) {
+      statusEl.innerText = `🤝 어시스트 대기 중 (${assist.supporterName})`; statusEl.style.color = "#e67e22"
+    } else if(assist?.supporter === mySlot) {
+      statusEl.innerText = `🤝 어시스트 지원 중 (${assist.requesterName})`; statusEl.style.color = "#3498db"
+    } else {
+      statusEl.innerText = ""
+    }
+  }
+
+  const popup = $("assist-popup")
+  if(popup) {
+    if(req && req.to === mySlot && !isSpectator) {
+      popup.style.display = "block"
+      const nameEl = $("assist-popup-name")
+      if(nameEl) nameEl.innerText = req.fromName ?? req.from
+    } else {
+      popup.style.display = "none"
+    }
+  }
+}
+
+// ── 싱크로나이즈 UI ──────────────────────────────
+function updateSyncUI(data) {
+  const myTeam   = teamOf(mySlot)
+  const sync     = data[`sync_team${myTeam}`] ?? null
+  const used     = data[`sync_used_${myTeam}`] ?? false
+  const req      = data.sync_request ?? null
+  const teamDead = isTeamAllDead(data)
+  const blocked  = cannotRequestSupport(data)
+
+  const reqBtn = $("sync-request-btn")
+  if(reqBtn) {
+    const isMyReq = req && req.from === mySlot
+    if(isSpectator || used || sync || teamDead || blocked) {
+      reqBtn.disabled  = true
+      reqBtn.innerText = teamDead ? "사용 불가" : sync ? "💠 싱크로나이즈 중" : used ? "동기화 완료" : blocked ? "요청 불가" : "동기화 요청"
+    } else if(isMyReq) {
+      reqBtn.disabled = true; reqBtn.innerText = "요청 중..."
+    } else {
+      reqBtn.disabled = false; reqBtn.innerText = "동기화 요청"
+    }
+  }
+
+  const statusEl = $("sync-status")
+  if(statusEl) {
+    if(sync?.requester === mySlot || sync?.supporter === mySlot) {
+      const partner = sync.requester === mySlot ? sync.supporterName : sync.requesterName
+      statusEl.innerText = `💠 싱크로나이즈 (${partner})`; statusEl.style.color = "#9b59b6"
+    } else {
+      statusEl.innerText = ""
+    }
+  }
+
+  const popup = $("sync-popup")
+  if(popup) {
+    if(req && req.to === mySlot && !isSpectator) {
+      popup.style.display = "block"
+      const nameEl = $("sync-popup-name")
+      if(nameEl) nameEl.innerText = req.fromName ?? req.from
+    } else {
+      popup.style.display = "none"
+    }
+  }
+
+  // sync_log 처리도 logQueue로
+  const myTeamKey = `sync_log_${myTeam}`
+  const syncLog   = data[myTeamKey]
+  if(syncLog && !renderedSyncLogs.has(syncLog)) {
+    renderedSyncLogs.add(syncLog)
+    logQueue.push({ type: "normal", text: syncLog, ts: Date.now() })
+    processLogQueue()
+  }
 }
 
 // ── 게임 종료 ────────────────────────────────────
@@ -534,202 +759,95 @@ async function doSkipTurn() {
   }
 }
 
-// ── ASSIST! 애니메이션 ───────────────────────────
-function showAssistAnimation() {
-  return new Promise(resolve => {
-    const el = $("assist-anim")
-    if(!el) { resolve(); return }
-    el.classList.remove("assist-show")
-    void el.offsetWidth
-    el.classList.add("assist-show")
-    setTimeout(resolve, 800)
+// ── Firestore 데이터를 UI에 실제 반영 ────────────
+// 로그 큐가 비었을 때 호출 (HP는 이미 로그 큐 통해 반영됨)
+function applyRoomData(data) {
+  ;["p1","p2","p3","p4"].forEach(s => updateSlotUI(s, data, false))
+  updateOrderDisplay(data)
+  updateTurnUI(data)
+  if(!isSpectator) {
+    updateMoveButtons(data)
+    updateBenchButtons(data)
+    updateAssistUI(data)
+    updateSyncUI(data)
+  }
+
+  const spectEl = $("spectator-list")
+  if(spectEl) {
+    const names = data.spectator_names ?? []
+    spectEl.innerText = names.length > 0 ? "관전: " + names.join(", ") : ""
+  }
+
+  if(data.game_over) {
+    // 로그 큐가 다 끝난 후 게임 종료 처리
+    showGameOver(data)
+    return
+  }
+
+  if(!isSpectator) {
+    const order   = data.current_order ?? []
+    const pending = data.pending_switches ?? []
+    const wasMyTurn   = myTurn
+    const isMyTurnNow = order[0] === mySlot
+    myTurn = isMyTurnNow
+
+    if(!wasMyTurn && isMyTurnNow) actionDone = false
+    if(pending.includes(mySlot))  actionDone = false
+
+    if(myTurn && !actionDone) {
+      const myEntry = data[`${mySlot}_entry`] ?? []
+      const allDead = myEntry.every(p => p.hp <= 0)
+      if(allDead) {
+        actionDone = true
+        doSkipTurn()
+        return
+      }
+    }
+
+    if(order.length === 0 && pending.length === 0 && data.game_started && !data.game_over) {
+      tryStartRound()
+    }
+  }
+}
+
+// ── listenLogs: 새 로그 감지 → 큐에 추가 ────────
+function listenLogs(gameStartedAt) {
+  const q = query(logsRef, orderBy("ts"))
+  onSnapshot(q, snap => {
+    const newEntries = []
+    snap.docs.forEach(d => {
+      if(renderedLogIds.has(d.id)) return
+      const logData = d.data()
+      if(gameStartedAt && logData.ts < gameStartedAt) return
+      renderedLogIds.add(d.id)
+      newEntries.push(logData)
+    })
+    if(newEntries.length > 0) enqueueLogs(newEntries)
   })
 }
 
-// ── SYNCHRONIZE! 애니메이션 ──────────────────────
-function showSyncAnimation() {
-  return new Promise(resolve => {
-    const el = $("sync-anim")
-    if(!el) { resolve(); return }
-    el.classList.remove("sync-show")
-    void el.offsetWidth
-    el.classList.add("sync-show")
-    setTimeout(resolve, 800)
+// ── listenRoom: Firestore 변경 감지 ─────────────
+// HP 직접 반영 X — 큐 재생이 끝난 후 applyRoomData 호출
+let lastDiceEventTs = 0
+
+function listenRoom() {
+  onSnapshot(roomRef, async snap => {
+    const data = snap.data()
+    if(!data || !data.p1_entry) return
+
+    // 라운드 시작 주사위 (dice_event는 startRound에서만)
+    if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
+      lastDiceEventTs = data.dice_event.ts
+      await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
+    }
+
+    // 로그 큐가 비어있으면 바로 반영, 처리 중이면 pending으로 저장
+    if(!isProcessing && logQueue.length === 0) {
+      applyRoomData(data)
+    } else {
+      pendingRoomData = data
+    }
   })
-}
-
-// ── 어시스트 UI ──────────────────────────────────
-function updateAssistUI(data) {
-  const myTeam   = teamOf(mySlot)
-  const assist   = data[`assist_team${myTeam}`] ?? null
-  const used     = data[`assist_used_${myTeam}`] ?? false
-  const req      = data.assist_request ?? null
-  const teamDead = isTeamAllDead(data)
-  const blocked  = cannotRequestSupport(data)  // 내 hp<=0 이거나 아군 pending
-
-  const reqBtn = $("assist-request-btn")
-  if(reqBtn) {
-    const isMyReq = req && req.from === mySlot
-    if(isSpectator || used || assist || teamDead || blocked) {
-      reqBtn.disabled  = true
-      reqBtn.innerText = teamDead ? "사용 불가"
-                       : assist   ? "🤝 어시스트 중"
-                       : used     ? "지원 완료"
-                       : blocked  ? "요청 불가"
-                       :            "지원 요청"
-    } else if(isMyReq) {
-      reqBtn.disabled  = true
-      reqBtn.innerText = "요청 중..."
-    } else {
-      reqBtn.disabled  = false
-      reqBtn.innerText = "지원 요청"
-    }
-  }
-
-  const statusEl = $("assist-status")
-  if(statusEl) {
-    if(assist?.requester === mySlot) {
-      statusEl.innerText = `🤝 어시스트 대기 중 (${assist.supporterName})`
-      statusEl.style.color = "#e67e22"
-    } else if(assist?.supporter === mySlot) {
-      statusEl.innerText = `🤝 어시스트 지원 중 (${assist.requesterName})`
-      statusEl.style.color = "#3498db"
-    } else {
-      statusEl.innerText = ""
-    }
-  }
-
-  const popup = $("assist-popup")
-  if(popup) {
-    if(req && req.to === mySlot && !isSpectator) {
-      popup.style.display = "block"
-      const nameEl = $("assist-popup-name")
-      if(nameEl) nameEl.innerText = req.fromName ?? req.from
-    } else {
-      popup.style.display = "none"
-    }
-  }
-}
-
-// ── 어시스트 액션 ────────────────────────────────
-async function doRequestAssist() {
-  if(!myTurn) { alert("자신의 턴에만 지원 요청할 수 있어!"); return }
-  try {
-    await _requestAssist({ roomId: ROOM_ID, mySlot })
-  } catch(e) {
-    alert(`어시스트 요청 실패: ${e.message}`)
-  }
-}
-
-async function doAcceptAssist() {
-  try {
-    await _acceptAssist({ roomId: ROOM_ID, mySlot })
-  } catch(e) {
-    alert(`수락 실패: ${e.message}`)
-  }
-}
-
-async function doRejectAssist() {
-  try {
-    await _rejectAssist({ roomId: ROOM_ID })
-  } catch(e) {
-    console.warn("거절 실패:", e.message)
-  }
-}
-
-// ── 싱크로나이즈 UI ──────────────────────────────
-function updateSyncUI(data) {
-  const myTeam   = teamOf(mySlot)
-  const sync     = data[`sync_team${myTeam}`] ?? null
-  const used     = data[`sync_used_${myTeam}`] ?? false
-  const req      = data.sync_request ?? null
-  const teamDead = isTeamAllDead(data)
-  const blocked  = cannotRequestSupport(data)  // 내 hp<=0 이거나 아군 pending
-
-  const reqBtn = $("sync-request-btn")
-  if(reqBtn) {
-    const isMyReq = req && req.from === mySlot
-    if(isSpectator || used || sync || teamDead || blocked) {
-      reqBtn.disabled  = true
-      reqBtn.innerText = teamDead ? "사용 불가"
-                       : sync     ? "💠 싱크로나이즈 중"
-                       : used     ? "동기화 완료"
-                       : blocked  ? "요청 불가"
-                       :            "동기화 요청"
-    } else if(isMyReq) {
-      reqBtn.disabled  = true
-      reqBtn.innerText = "요청 중..."
-    } else {
-      reqBtn.disabled  = false
-      reqBtn.innerText = "동기화 요청"
-    }
-  }
-
-  const statusEl = $("sync-status")
-  if(statusEl) {
-    if(sync?.requester === mySlot || sync?.supporter === mySlot) {
-      const partner = sync.requester === mySlot ? sync.supporterName : sync.requesterName
-      statusEl.innerText = `💠 싱크로나이즈 (${partner})`
-      statusEl.style.color = "#9b59b6"
-    } else {
-      statusEl.innerText = ""
-    }
-  }
-
-  const popup = $("sync-popup")
-  if(popup) {
-    if(req && req.to === mySlot && !isSpectator) {
-      popup.style.display = "block"
-      const nameEl = $("sync-popup-name")
-      if(nameEl) nameEl.innerText = req.fromName ?? req.from
-    } else {
-      popup.style.display = "none"
-    }
-  }
-
-  const syncLogKey = `sync_log_${myTeam}`
-  const syncLog    = data[syncLogKey]
-  if(syncLog && !renderedSyncLogs.has(syncLog)) {
-    renderedSyncLogs.add(syncLog)
-    typingQueue.push({ text: syncLog })
-    processQueue()
-  }
-}
-
-// ── 싱크 액션 ────────────────────────────────────
-async function doRequestSync() {
-  if(!myTurn) { alert("자신의 턴에만 동기화 요청할 수 있어!"); return }
-  try {
-    await _requestSync({ roomId: ROOM_ID, mySlot })
-  } catch(e) {
-    alert(`동기화 요청 실패: ${e.message}`)
-  }
-}
-
-async function doAcceptSync() {
-  try {
-    await _acceptSync({ roomId: ROOM_ID, mySlot })
-  } catch(e) {
-    alert(`수락 실패: ${e.message}`)
-  }
-}
-
-async function doRejectSync() {
-  try {
-    await _rejectSync({ roomId: ROOM_ID })
-  } catch(e) {
-    console.warn("거절 실패:", e.message)
-  }
-}
-
-// ── 방 나가기 ────────────────────────────────────
-async function leaveGame() {
-  try {
-    await _leaveGame({ roomId: ROOM_ID, myUid })
-  } catch(e) {
-    console.error("leaveGame 오류:", e)
-  }
-  location.href = "../main.html"
 }
 
 // ── startRound (중복 방지) ───────────────────────
@@ -746,95 +864,41 @@ async function tryStartRound() {
   }
 }
 
-// ── 메인 리스너 ─────────────────────────────────
-function listenRoom() {
-  onSnapshot(roomRef, async snap => {
-    const data = snap.data()
-    if(!data) return
+// ── 어시스트 액션 ────────────────────────────────
+async function doRequestAssist() {
+  if(!myTurn) { alert("자신의 턴에만 지원 요청할 수 있어!"); return }
+  try { await _requestAssist({ roomId: ROOM_ID, mySlot }) }
+  catch(e) { alert(`어시스트 요청 실패: ${e.message}`) }
+}
+async function doAcceptAssist() {
+  try { await _acceptAssist({ roomId: ROOM_ID, mySlot }) }
+  catch(e) { alert(`수락 실패: ${e.message}`) }
+}
+async function doRejectAssist() {
+  try { await _rejectAssist({ roomId: ROOM_ID }) }
+  catch(e) { console.warn("거절 실패:", e.message) }
+}
 
-    const spectEl = $("spectator-list")
-    if(spectEl) {
-      const names = data.spectator_names ?? []
-      spectEl.innerText = names.length > 0 ? "관전: " + names.join(", ") : ""
-    }
+// ── 싱크 액션 ────────────────────────────────────
+async function doRequestSync() {
+  if(!myTurn) { alert("자신의 턴에만 동기화 요청할 수 있어!"); return }
+  try { await _requestSync({ roomId: ROOM_ID, mySlot }) }
+  catch(e) { alert(`동기화 요청 실패: ${e.message}`) }
+}
+async function doAcceptSync() {
+  try { await _acceptSync({ roomId: ROOM_ID, mySlot }) }
+  catch(e) { alert(`수락 실패: ${e.message}`) }
+}
+async function doRejectSync() {
+  try { await _rejectSync({ roomId: ROOM_ID }) }
+  catch(e) { console.warn("거절 실패:", e.message) }
+}
 
-    if(!data.p1_entry) {
-      if(!isSpectator) { updateAssistUI(data); updateSyncUI(data) }
-      return
-    }
-
-    ;["p1","p2","p3","p4"].forEach(s => updateSlotUI(s, data))
-
-    if(data.assist_event && data.assist_event.ts > lastAssistEventTs) {
-      lastAssistEventTs = data.assist_event.ts
-      if(!isHandlingSnapshot) {
-        isHandlingSnapshot = true
-        await showAssistAnimation()
-        isHandlingSnapshot = false
-      }
-    }
-
-    if(data.sync_event && data.sync_event.ts > lastSyncEventTs) {
-      lastSyncEventTs = data.sync_event.ts
-      if(!isHandlingSnapshot) {
-        isHandlingSnapshot = true
-        await showSyncAnimation()
-        isHandlingSnapshot = false
-      }
-    }
-
-    if(data.hit_event && data.hit_event.ts > lastHitEventTs) {
-      lastHitEventTs = data.hit_event.ts
-      const prefix = slotToPrefix(data.hit_event.defender)
-      if(prefix) triggerBlink(prefix)
-    }
-
-    if(data.attack_dice_event && data.attack_dice_event.ts > lastAttackDiceTs) {
-      lastAttackDiceTs = data.attack_dice_event.ts
-      await animateAttackDice(data.attack_dice_event.slot, data.attack_dice_event.roll)
-    }
-
-    if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
-      lastDiceEventTs = data.dice_event.ts
-      animateDice(data.dice_event.rolls, data.dice_event.slots)
-    }
-
-    if(data.game_over) { showGameOver(data); return }
-
-    updateOrderDisplay(data)
-
-    if(!isSpectator) {
-      const order   = data.current_order ?? []
-      const pending = data.pending_switches ?? []
-
-      const wasMyTurn   = myTurn
-      const isMyTurnNow = order[0] === mySlot
-      myTurn = isMyTurnNow
-
-      if(!wasMyTurn && isMyTurnNow) actionDone = false
-      if(pending.includes(mySlot))  actionDone = false
-
-      if(myTurn && !actionDone) {
-        const myEntry = data[`${mySlot}_entry`] ?? []
-        const allDead = myEntry.every(p => p.hp <= 0)
-        if(allDead) {
-          actionDone = true
-          await doSkipTurn()
-          return
-        }
-      }
-
-      if(order.length === 0 && pending.length === 0 && data.game_started && !data.game_over) {
-        await tryStartRound()
-      }
-    }
-
-    updateTurnUI(data)
-    updateMoveButtons(data)
-    updateBenchButtons(data)
-    if(!isSpectator) updateAssistUI(data)
-    if(!isSpectator) updateSyncUI(data)
-  })
+// ── 방 나가기 ────────────────────────────────────
+async function leaveGame() {
+  try { await _leaveGame({ roomId: ROOM_ID, myUid }) }
+  catch(e) { console.error("leaveGame 오류:", e) }
+  location.href = "../main.html"
 }
 
 // ── 인증 후 시작 ─────────────────────────────────
