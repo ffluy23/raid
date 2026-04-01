@@ -73,8 +73,8 @@ function tickRanks(pokemon, logEntries) {
     pokemon.roostTurns--
     if(pokemon.roostTurns <= 0) {
       if(pokemon._origType !== undefined) {
-        pokemon.type      = pokemon._origType
-        pokemon._origType = undefined
+        pokemon.type = pokemon._origType
+        delete pokemon._origType  // ✅ undefined 대신 delete로 키 제거 (Firestore undefined 오류 방지)
       }
       pokemon.roostTurns = 0
     }
@@ -202,7 +202,7 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
     myPkmn.hp      = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
     logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name,"은는")} HP를 회복했다! (+${heal})`, { slot: myPkmn._slot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
     const types = Array.isArray(myPkmn.type) ? [...myPkmn.type] : [myPkmn.type]
-    myPkmn._origType  = myPkmn.type
+    myPkmn._origType  = myPkmn.type   // ✅ 실제 타입 값이 저장되므로 Firestore OK
     myPkmn.type       = types.includes("비행") ? types.filter(t => t !== "비행") : ["노말"]
     if(myPkmn.type.length === 0) myPkmn.type = ["노말"]
     myPkmn.roostTurns = 1
@@ -381,7 +381,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     const dmg = Math.floor(rollPower * mult)
     logEntries.push(makeLog("after_hit", `구르기 ${rollTurn}번째 (위력 ${rollPower})!`))
     dealDamage(dmg, mult, false, tSlot, tPkmn)
-    // 타겟 기절하면 즉시 캔슬, 아니면 targetSlot 유지
     if(tPkmn.hp <= 0 || rollTurn >= 3) {
       myPkmn.rollState = { active:false, turn:0 }
     } else {
@@ -585,16 +584,13 @@ export default async function handler(req, res) {
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── 참기 자동처리
-  // bideState가 있으면 moveIdx/기술명 무관하게 무조건 참기 진행
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if(myPkmn.bideState) {
     myPkmn.bideState.turnsLeft--
 
     if(myPkmn.bideState.turnsLeft > 0) {
-      // 아직 참는 중
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
     } else {
-      // 발사 턴
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
       const bide = myPkmn.bideState
       myPkmn.bideState = null
@@ -607,7 +603,6 @@ export default async function handler(req, res) {
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참았던 에너지를 방출했다!`))
 
         if(!attackerSlot) {
-          // 마지막 공격자 정보 없으면 발사 실패
           logEntries.push(makeLog("normal", `그러나 공격할 대상이 없다!`))
         } else {
           const eIdx  = data[`${attackerSlot}_active_idx`] ?? 0
@@ -631,17 +626,15 @@ export default async function handler(req, res) {
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── 구르기 자동처리
-  // rollState.active가 있으면 moveIdx/기술명 무관하게 구르기 2~3번째 진행
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if(myPkmn.rollState?.active) {
     const rollState = myPkmn.rollState
     const rollTurn  = rollState.turn + 1
     const rollPower = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
-    const targetSlot = rollState.targetSlot ?? null   // 최초 지정 타겟 고정
+    const targetSlot = rollState.targetSlot ?? null
 
     logEntries.push(makeLog("move_announce", `${myPkmn.name}의 구르기! (${rollTurn}번째)`))
 
-    // 타겟이 없거나 이미 기절했으면 캔슬
     if(!targetSlot) {
       logEntries.push(makeLog("normal", `구르기가 캔슬됐다!`))
       myPkmn.rollState = { active: false, turn: 0 }
@@ -675,11 +668,11 @@ export default async function handler(req, res) {
             logEntries.push(makeLog("after_hit", `구르기 ${rollTurn}번째 (${rollPower} 데미지)!`))
             if(ePkmn.hp <= 0) {
               logEntries.push(makeLog("faint", `${ePkmn.name}${josa(ePkmn.name,"은는")} 쓰러졌다!`, { slot: targetSlot }))
-              myPkmn.rollState = { active: false, turn: 0 }  // 타겟 기절 → 캔슬
+              myPkmn.rollState = { active: false, turn: 0 }
             } else {
               myPkmn.rollState = rollTurn >= 3
                 ? { active: false, turn: 0 }
-                : { active: true, turn: rollTurn, targetSlot }  // 타겟 유지
+                : { active: true, turn: rollTurn, targetSlot }
             }
           }
         }
@@ -870,7 +863,7 @@ export default async function handler(req, res) {
           tPkmn.lastReceivedDamage = mainDmg
           if(tPkmn.bideState) {
             tPkmn.bideState.damage = (tPkmn.bideState.damage ?? 0) + mainDmg
-            tPkmn.bideState.lastAttackerSlot = mySlot  // 마지막 공격자 기록
+            tPkmn.bideState.lastAttackerSlot = mySlot
           }
         }
       }
