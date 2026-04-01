@@ -11,7 +11,6 @@ import {
   handleEot
 } from "../lib/gameUtils.js"
 
-// ── 타입 로그 빌더 ──────────────────────────────────────────────────
 function makeLog(type, text = "", meta = null) {
   return { type, text, ...(meta ? { meta } : {}) }
 }
@@ -21,7 +20,6 @@ async function writeLogs(roomId, logEntries) {
   const base    = Date.now()
   const batch   = db.batch()
   let assistEventTs = null, syncEventTs = null
-
   logEntries.forEach((entry, i) => {
     const ts = base + i
     if(entry.type === "assist") assistEventTs = ts
@@ -33,20 +31,15 @@ async function writeLogs(roomId, logEntries) {
 }
 
 // ── ranks 구조: 보정치(±정수)만 저장, 기본값 0
-// atk: 자속보정 이후 ±정수로 더함, 최대 ±4, 최종값 음수 불가
-// def: 최종 데미지에서 defRank*3 추가로 빼거나 더함, 최대 ±3
-// spd: 회피율에 ±%p로 더함, 최대 ±5
 function defaultRanks() {
   return { atk:0, atkTurns:0, def:0, defTurns:0, spd:0, spdTurns:0 }
 }
 
-// 현재 활성 랭크 보정치 반환 (턴 만료 시 0)
 function getActiveRankVal(pokemon, key) {
   const r = pokemon.ranks ?? {}
   return (r[`${key}Turns`] ?? 0) > 0 ? (r[key] ?? 0) : 0
 }
 
-// 기본 스탯 반환 (랭크 보정 없이)
 function getBaseStat(pokemon, key) {
   return pokemon[key === "atk" ? "attack" : key === "def" ? "defense" : "speed"] ?? 3
 }
@@ -64,36 +57,26 @@ function clearRankStack(pokemon) {
 function tickRanks(pokemon, logEntries) {
   if(!pokemon.ranks) return
   const r = pokemon.ranks
-  // 만료 시 보정치 0으로 리셋
   if(r.atkTurns > 0) { r.atkTurns--; if(!r.atkTurns) { r.atk = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 공격 랭크가 원래대로 돌아왔다!`)) } }
   if(r.defTurns > 0) { r.defTurns--; if(!r.defTurns) { r.def = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 방어 랭크가 원래대로 돌아왔다!`)) } }
   if(r.spdTurns > 0) { r.spdTurns--; if(!r.spdTurns) { r.spd = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드 랭크가 원래대로 돌아왔다!`)) } }
   if((pokemon.roostTurns ?? 0) > 0) {
     pokemon.roostTurns--
     if(pokemon.roostTurns <= 0) {
-      if(pokemon._origType !== undefined) {
-        pokemon.type = pokemon._origType
-        delete pokemon._origType
-      }
+      if(pokemon._origType !== undefined) { pokemon.type = pokemon._origType; delete pokemon._origType }
       pokemon.roostTurns = 0
     }
   }
 }
 
-// ── 랭크 적용
-// ranks는 보정치(±정수)만 저장
-// atk: 최대 ±4 / def: 최대 ±3 / spd: 최대 ±5
-// 같은 기술 연속 사용 시 스택 (2회까지)
 function applyRankChanges(r, self, target, moveName, logEntries) {
   if(!r) return
   const roll = r.chance !== undefined ? Math.random() < r.chance : true
   if(!roll) return
 
-  // 현재 보정치 읽기
   const selfR   = { ...(self.ranks   ?? defaultRanks()) }
   const targetR = { ...(target.ranks ?? defaultRanks()) }
 
-  // 같은 기술 연속 사용 스택 처리 (self 랭크업 기술에만 적용)
   if(moveName) {
     const isSame = self.lastRankMove === moveName
     const stack  = self.rankStack ?? 0
@@ -108,20 +91,13 @@ function applyRankChanges(r, self, target, moveName, logEntries) {
     const maxVal = key === "atk" ? ATK_MAX : key === "def" ? DEF_MAX : SPD_MAX
     const cur    = obj[key] ?? 0
     if(delta > 0) {
-      if(cur >= maxVal) {
-        logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 이미 최대다!`))
-        return
-      }
+      if(cur >= maxVal) { logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 이미 최대다!`)); return }
       const next = Math.min(maxVal, cur + delta)
       obj[key] = next; obj[`${key}Turns`] = r.turns ?? 2
       logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${next - cur} 올라갔다! (${next > 0 ? "+" : ""}${next})`))
     } else if(delta < 0) {
-      // 최종값은 음수 불가 → 0이면 내려갈 수 없음 (단, 다운은 상대에게 적용하므로 별도 체크 불필요)
       const minVal = isTarget ? -maxVal : 0
-      if(cur <= minVal) {
-        logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 더 이상 내려가지 않는다!`))
-        return
-      }
+      if(cur <= minVal) { logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 더 이상 내려가지 않는다!`)); return }
       const next = Math.max(minVal, cur + delta)
       obj[key] = next; obj[`${key}Turns`] = r.turns ?? 2
       logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${cur - next} 내려갔다! (${next > 0 ? "+" : ""}${next})`))
@@ -144,16 +120,14 @@ function calcHit(atk, moveInfo, def) {
   if(moveInfo.alwaysHit || moveInfo.skipEvasion)       return { hit:true,  hitType:"hit" }
   const as = Math.max(1, getBaseStat(atk, "spd") - getStatusSpdPenalty(atk))
   const ds = Math.max(1, getBaseStat(def, "spd") - getStatusSpdPenalty(def))
-  // 회피율 = 5 × (상대 spd - 내 spd)% ± spd 랭크 보정%p
   const atkSpdRank = getActiveRankVal(atk, "spd")
   const defSpdRank = getActiveRankVal(def, "spd")
   const baseEv  = Math.max(0, 5 * (ds - as))
-  const rankAdj = defSpdRank - atkSpdRank  // 상대 회피 + 내 명중 반영
+  const rankAdj = defSpdRank - atkSpdRank
   const ev = Math.min(99, Math.max(0, baseEv + rankAdj))
   return Math.random()*100 < ev ? { hit:false, hitType:"evaded" } : { hit:true, hitType:"hit" }
 }
 
-// diceOverride: aoe 기술에서 첫 타겟의 주사위를 나머지에 재사용할 때 넘김
 function calcDamage(atk, moveName, def, powerOverride=null, atkStatOverride=null, diceOverride=null) {
   const move = moves[moveName]
   if(!move) return { damage:0, multiplier:1, stab:false, critical:false, dice:0 }
@@ -167,27 +141,15 @@ function calcDamage(atk, moveName, def, powerOverride=null, atkStatOverride=null
   const power    = powerOverride ?? (move.power ?? 40)
   const atkStat  = atkStatOverride ?? getBaseStat(atk, "atk")
   const defStat  = getBaseStat(def, "def")
-
-  // 공식: (위력 + 공격력×4 + 주사위) × 타입상성 × 자속보정
-  const base = power + atkStat*4 + dice
-  const raw  = Math.floor(base * mult * (stab ? 1.3 : 1))
-
-  // 공격 랭크: 자속보정 이후 ±정수, 최대 ±4, 최종값 음수 불가
-  const atkRank   = getActiveRankVal(atk, "atk")
-  const afterAtk  = Math.max(0, raw + atkRank)
-
-  // 방어 스탯 감산
-  const afterDef  = Math.max(0, afterAtk - defStat*5)
-
-  // 방어 랭크: 최종 데미지에서 defRank×3 추가 감산, 최대 ±3
-  const defRank   = getActiveRankVal(def, "def")
+  const base     = power + atkStat*4 + dice
+  const raw      = Math.floor(base * mult * (stab ? 1.3 : 1))
+  const atkRank  = getActiveRankVal(atk, "atk")
+  const afterAtk = Math.max(0, raw + atkRank)
+  const afterDef = Math.max(0, afterAtk - defStat*5)
+  const defRank  = getActiveRankVal(def, "def")
   const afterDefR = Math.max(0, afterDef - defRank*3)
-
-  // 급소: 공격 랭크 영향 없음, 단 급소 피해량엔 atkRank 반영됨 (이미 afterAtk에 포함)
-  const critical  = Math.random()*100 < Math.min(100, atkStat*2)
-  const finalDmg  = critical ? Math.floor(afterDefR*1.5) : afterDefR
-
-  return { damage: finalDmg, multiplier:mult, stab, critical, dice }
+  const critical = Math.random()*100 < Math.min(100, atkStat*2)
+  return { damage: critical ? Math.floor(afterDefR*1.5) : afterDefR, multiplier:mult, stab, critical, dice }
 }
 
 // ── 특수 비공격 기술 ─────────────────────────────────────────────────
@@ -245,11 +207,7 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
     const { hit } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 공격은 빗나갔다!`)); return { handled:true } }
     if(tPkmn.seeded) { logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"은는")} 이미 씨뿌리기 상태다!`)) }
-    else {
-      tPkmn.seeded     = true
-      tPkmn.seederSlot = mySlot
-      logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"의")} 몸에 씨를 뿌렸다!`))
-    }
+    else { tPkmn.seeded = true; tPkmn.seederSlot = mySlot; logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"의")} 몸에 씨를 뿌렸다!`)) }
     return { handled:true }
   }
   if(moveInfo.healPulse) {
@@ -316,12 +274,12 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
 
   function dealDamage(dmg, multiplier, critical, slot, pkmn) {
     pkmn.hp = Math.max(0, pkmn.hp - dmg)
-    logEntries.push(makeLog("hit",      "", { defender: slot }))
-    logEntries.push(makeLog("hp",       "", { slot, hp: pkmn.hp, maxHp: pkmn.maxHp }))
+    logEntries.push(makeLog("hit",  "", { defender: slot }))
+    logEntries.push(makeLog("hp",   "", { slot, hp: pkmn.hp, maxHp: pkmn.maxHp }))
     if(multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
     if(multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
     if(critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
-    if(pkmn.hp <= 0)   logEntries.push(makeLog("faint",     `${pkmn.name}${josa(pkmn.name,"은는")} 쓰러졌다!`, { slot }))
+    if(pkmn.hp <= 0)   logEntries.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name,"은는")} 쓰러졌다!`, { slot }))
   }
 
   if(moveInfo.jumpKick) {
@@ -336,7 +294,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     }
     return { handled:false, damage:0 }
   }
-
   if(moveInfo.counter) {
     const lastDmg = myPkmn.lastReceivedDamage ?? 0
     if(lastDmg <= 0) { logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"의")} 카운터는 실패했다!`)); return { handled:true, damage:0 } }
@@ -347,7 +304,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     myPkmn.lastReceivedDamage = 0
     return { handled:true, damage:dmg }
   }
-
   if(moveInfo.revenge || moveInfo.comeback) {
     const lastDmg = myPkmn.lastReceivedDamage ?? 0
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
@@ -361,18 +317,16 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     myPkmn.lastReceivedDamage = 0
     return { handled:true, damage:finalDmg }
   }
-
   if(moveInfo.reversal) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
-    const hpRatio  = myPkmn.hp / (myPkmn.maxHp ?? myPkmn.hp)
-    const revMult  = hpRatio <= 0.25 ? 2.0 : hpRatio <= 0.5 ? 1.5 : 1.0
+    const hpRatio = myPkmn.hp / (myPkmn.maxHp ?? myPkmn.hp)
+    const revMult = hpRatio <= 0.25 ? 2.0 : hpRatio <= 0.5 ? 1.5 : 1.0
     const { damage: rawDmg, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
     if(multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled:true, damage:0 } }
     dealDamage(Math.floor(rawDmg * revMult), multiplier, critical, tSlot, tPkmn)
     return { handled:true, damage: Math.floor(rawDmg * revMult) }
   }
-
   if(moveInfo.guts) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
@@ -383,31 +337,22 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     dealDamage(Math.floor(rawDmg * gutsMult), multiplier, critical, tSlot, tPkmn)
     return { handled:true, damage: Math.floor(rawDmg * gutsMult) }
   }
-
   if(moveInfo.rollout) {
     const rollState = myPkmn.rollState ?? { active:false, turn:0 }
     const rollTurn  = rollState.active ? rollState.turn + 1 : 1
     const rollPower = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
-    if(!hit) {
-      missLog(hitType)
-      myPkmn.rollState = { active:false, turn:0 }
-      return { handled:true, damage:0 }
-    }
+    if(!hit) { missLog(hitType); myPkmn.rollState = { active:false, turn:0 }; return { handled:true, damage:0 } }
     const defTypes = Array.isArray(tPkmn.type) ? tPkmn.type : [tPkmn.type]
     let mult = 1; for(const dt of defTypes) mult *= getTypeMultiplier(moves[moveName]?.type, dt)
     if(mult === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); myPkmn.rollState = { active:false, turn:0 }; return { handled:true, damage:0 } }
     const dmg = Math.floor(rollPower * mult)
     logEntries.push(makeLog("after_hit", `구르기 ${rollTurn}번째 (위력 ${rollPower})!`))
     dealDamage(dmg, mult, false, tSlot, tPkmn)
-    if(tPkmn.hp <= 0 || rollTurn >= 3) {
-      myPkmn.rollState = { active:false, turn:0 }
-    } else {
-      myPkmn.rollState = { active:true, turn:rollTurn, targetSlot: tSlot }
-    }
+    if(tPkmn.hp <= 0 || rollTurn >= 3) { myPkmn.rollState = { active:false, turn:0 } }
+    else { myPkmn.rollState = { active:true, turn:rollTurn, targetSlot: tSlot } }
     return { handled:true, damage:dmg }
   }
-
   if(moveInfo.multiHit) {
     const { min, max, fixedDamage } = moveInfo.multiHit
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
@@ -427,8 +372,7 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
       }
       lastMult = multiplier
       if(multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); break }
-      tPkmn.hp = Math.max(0, tPkmn.hp - dmg)
-      totalDmg += dmg
+      tPkmn.hp = Math.max(0, tPkmn.hp - dmg); totalDmg += dmg
       logEntries.push(makeLog("hit", "", { defender: tSlot }))
       logEntries.push(makeLog("hp",  "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
       if(critical) logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
@@ -439,7 +383,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     logEntries.push(makeLog("after_hit", `${hits}번 공격했다! (총 ${totalDmg} 데미지)`))
     return { handled:true, damage:totalDmg }
   }
-
   if(moveInfo.effect && moveInfo.effect.recoil) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
@@ -452,7 +395,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     if(myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name,"은는")} 쓰러졌다!`, { slot: mySlot }))
     return { handled:true, damage }
   }
-
   if(moveInfo.clearSmog) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
@@ -462,7 +404,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     if(multiplier > 0) dealDamage(damage, multiplier, critical, tSlot, tPkmn)
     return { handled:true, damage: multiplier > 0 ? damage : 0 }
   }
-
   if(moveInfo.dragonTail) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
@@ -470,8 +411,8 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     if(multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled:true, damage:0 } }
     dealDamage(damage, multiplier, critical, tSlot, tPkmn)
     if(tPkmn.hp > 0) {
-      const tIdx       = data[`${tSlot}_active_idx`] ?? 0
-      const tEntry     = entries[tSlot]
+      const tIdx   = data[`${tSlot}_active_idx`] ?? 0
+      const tEntry = entries[tSlot]
       const benchAlive = tEntry.map((p,i) => i !== tIdx && p.hp > 0 ? i : -1).filter(i => i !== -1)
       if(benchAlive.length > 0) {
         const randIdx = benchAlive[Math.floor(Math.random() * benchAlive.length)]
@@ -482,7 +423,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     }
     return { handled:true, damage }
   }
-
   if(moveInfo.trickster) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
@@ -492,7 +432,6 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     dealDamage(finalDmg, multiplier, critical, tSlot, tPkmn)
     return { handled:true, damage:finalDmg }
   }
-
   if(moveInfo.sickPower) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
@@ -503,22 +442,16 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     dealDamage(Math.floor(damage * sickMult), multiplier, critical, tSlot, tPkmn)
     return { handled:true, damage: Math.floor(damage * sickMult) }
   }
-
   if(moveInfo.lastResort) {
     const usedMoves  = myPkmn.usedMoves ?? []
     const otherMoves = (myPkmn.moves ?? []).filter(m => m.name !== moveName)
     const allUsed    = otherMoves.every(m => usedMoves.includes(m.name)) && usedMoves.length > 0
-    if(!allUsed) {
-      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 아직 다른 기술을 쓰지 않았다!`))
-      return { handled:true, damage:0 }
-    }
+    if(!allUsed) { logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 아직 다른 기술을 쓰지 않았다!`)); return { handled:true, damage:0 } }
     return { handled:false, damage:0 }
   }
-
   return { handled:false, damage:0 }
 }
 
-// ── EOT 씨뿌리기 ──────────────────────────────────────────────────────
 async function applyLeechSeedEot(entries, data, logEntries) {
   for(const tSlot of ALL_FS) {
     const tIdx  = data[`${tSlot}_active_idx`] ?? 0
@@ -531,7 +464,7 @@ async function applyLeechSeedEot(entries, data, logEntries) {
     const dmg   = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.1))
     tPkmn.hp    = Math.max(0, tPkmn.hp - dmg)
     logEntries.push(makeLog("normal", `씨뿌리기가 ${tPkmn.name}${josa(tPkmn.name,"의")} 체력을 빼앗는다!`))
-    logEntries.push(makeLog("hp",     "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
+    logEntries.push(makeLog("hp", "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
     if(sPkmn && sPkmn.hp > 0) {
       sPkmn.hp = Math.min(sPkmn.maxHp ?? sPkmn.hp, sPkmn.hp + dmg)
       logEntries.push(makeLog("hp", `${sPkmn.name}${josa(sPkmn.name,"은는")} 체력을 흡수했다! (+${dmg})`, { slot: seederSlot, hp: sPkmn.hp, maxHp: sPkmn.maxHp }))
@@ -540,7 +473,6 @@ async function applyLeechSeedEot(entries, data, logEntries) {
   }
 }
 
-// ── 공통 early return 헬퍼 ────────────────────────────────────────────
 async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {}) {
   const { assistEventTs, syncEventTs } = await writeLogs(roomId, logEntries)
   const newOrder = (data.current_order ?? []).slice(1)
@@ -556,16 +488,11 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
     if(data[`${s}_active_idx`] !== undefined) finalUpdate[`${s}_active_idx`] = data[`${s}_active_idx`]
   })
   const winTeam = checkWin(entries)
-  if(winTeam) {
-    finalUpdate.game_over = true
-    finalUpdate.winner_team = winTeam
-    finalUpdate.current_order = []
-  }
+  if(winTeam) { finalUpdate.game_over = true; finalUpdate.winner_team = winTeam; finalUpdate.current_order = [] }
   await roomRef.update(finalUpdate)
   return winTeam
 }
 
-// ── 메인 핸들러 ───────────────────────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(corsHeaders()).forEach(([k,v]) => res.setHeader(k,v))
   if(req.method === "OPTIONS") return res.status(200).end()
@@ -598,29 +525,23 @@ export default async function handler(req, res) {
   const supporterSlot    = isRequester ? assist.supporter : null
   let assistUsedThisTurn = false
   const activatedSyncKeys = new Set()
-
   const logEntries = []
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── 참기 자동처리
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if(myPkmn.bideState) {
     myPkmn.bideState.turnsLeft--
-
     if(myPkmn.bideState.turnsLeft > 0) {
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
     } else {
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
       const bide = myPkmn.bideState
       myPkmn.bideState = null
-
       if(!bide || bide.damage <= 0) {
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참기 발사에 실패했다!`))
       } else {
-        const bideDmg      = bide.damage * 2
+        const bideDmg = bide.damage * 2
         const attackerSlot = bide.lastAttackerSlot ?? null
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참았던 에너지를 방출했다!`))
-
         if(!attackerSlot) {
           logEntries.push(makeLog("normal", `그러나 공격할 대상이 없다!`))
         } else {
@@ -638,73 +559,52 @@ export default async function handler(req, res) {
         }
       }
     }
-
     const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
     return res.status(200).json({ ok:true, ...(winTeam ? { winTeam } : {}) })
   }
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── 구르기 자동처리
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if(myPkmn.rollState?.active) {
-    const rollState = myPkmn.rollState
-    const rollTurn  = rollState.turn + 1
-    const rollPower = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
+    const rollState  = myPkmn.rollState
+    const rollTurn   = rollState.turn + 1
+    const rollPower  = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
     const targetSlot = rollState.targetSlot ?? null
-
     logEntries.push(makeLog("move_announce", `${myPkmn.name}의 구르기! (${rollTurn}번째)`))
-
     if(!targetSlot) {
       logEntries.push(makeLog("normal", `구르기가 캔슬됐다!`))
       myPkmn.rollState = { active: false, turn: 0 }
     } else {
       const eIdx  = data[`${targetSlot}_active_idx`] ?? 0
       const ePkmn = entries[targetSlot][eIdx]
-
       if(!ePkmn || ePkmn.hp <= 0) {
         logEntries.push(makeLog("normal", `${ePkmn?.name ?? "상대"}${josa(ePkmn?.name ?? "상대","은는")} 이미 쓰러져서 구르기가 캔슬됐다!`))
         myPkmn.rollState = { active: false, turn: 0 }
       } else {
         const { hit, hitType } = calcHit(myPkmn, { accuracy: 90, alwaysHit: false }, ePkmn)
         if(!hit) {
-          logEntries.push(makeLog("normal", hitType === "evaded"
-            ? `${ePkmn.name}에게는 맞지 않았다!`
-            : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
+          logEntries.push(makeLog("normal", hitType === "evaded" ? `${ePkmn.name}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
           myPkmn.rollState = { active: false, turn: 0 }
         } else {
           const defTypes = Array.isArray(ePkmn.type) ? ePkmn.type : [ePkmn.type]
-          let mult = 1
-          for(const dt of defTypes) mult *= getTypeMultiplier("바위", dt)
-
-          if(mult === 0) {
-            logEntries.push(makeLog("normal", `${ePkmn.name}에게는 효과가 없다…`))
-            myPkmn.rollState = { active: false, turn: 0 }
-          } else {
+          let mult = 1; for(const dt of defTypes) mult *= getTypeMultiplier("바위", dt)
+          if(mult === 0) { logEntries.push(makeLog("normal", `${ePkmn.name}에게는 효과가 없다…`)); myPkmn.rollState = { active: false, turn: 0 } }
+          else {
             const dmg = Math.floor(rollPower * mult)
             ePkmn.hp = Math.max(0, ePkmn.hp - dmg)
             logEntries.push(makeLog("hit", "", { defender: targetSlot }))
             logEntries.push(makeLog("hp",  "", { slot: targetSlot, hp: ePkmn.hp, maxHp: ePkmn.maxHp }))
             logEntries.push(makeLog("after_hit", `구르기 ${rollTurn}번째 (${rollPower} 데미지)!`))
-            if(ePkmn.hp <= 0) {
-              logEntries.push(makeLog("faint", `${ePkmn.name}${josa(ePkmn.name,"은는")} 쓰러졌다!`, { slot: targetSlot }))
-              myPkmn.rollState = { active: false, turn: 0 }
-            } else {
-              myPkmn.rollState = rollTurn >= 3
-                ? { active: false, turn: 0 }
-                : { active: true, turn: rollTurn, targetSlot }
-            }
+            if(ePkmn.hp <= 0) { logEntries.push(makeLog("faint", `${ePkmn.name}${josa(ePkmn.name,"은는")} 쓰러졌다!`, { slot: targetSlot })); myPkmn.rollState = { active: false, turn: 0 } }
+            else { myPkmn.rollState = rollTurn >= 3 ? { active: false, turn: 0 } : { active: true, turn: rollTurn, targetSlot } }
           }
         }
       }
     }
-
     const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
     return res.status(200).json({ ok:true, ...(winTeam ? { winTeam } : {}) })
   }
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── 일반 기술 처리
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   const pre = checkPreActionStatus(myPkmn)
   pre.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
@@ -729,7 +629,7 @@ export default async function handler(req, res) {
 
         if(!specialResult.handled) {
           const r            = moveInfo?.rank
-          const targetsEnemy = r && (r.targetAtk!==undefined || r.targetDef!==undefined || r.targetSpd!==undefined)
+          const targetsEnemy = (r && (r.targetAtk!==undefined || r.targetDef!==undefined || r.targetSpd!==undefined))
             || moveInfo?.targetSelf === false
 
           if(tSlots.length > 0) {
@@ -745,11 +645,17 @@ export default async function handler(req, res) {
               applyMoveEffect(moveInfo?.effect, myPkmn, tPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
             }
           } else {
-            if(!moveInfo?.alwaysHit && Math.random()*100 >= (moveInfo?.accuracy ?? 100)) {
-              logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 기술은 실패했다!`))
+            // ── tSlots 없을 때: targetSelf: false인 기술은 자기한테 적용 안 함 ──
+            if(moveInfo?.targetSelf === false) {
+              // 상대 대상 기술인데 타겟이 없는 경우 (클라이언트에서 타겟 안 보낸 경우)
+              logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
             } else {
-              applyRankChanges(r ?? null, myPkmn, myPkmn, moveData.name, logEntries)
-              applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+              if(!moveInfo?.alwaysHit && Math.random()*100 >= (moveInfo?.accuracy ?? 100)) {
+                logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 기술은 실패했다!`))
+              } else {
+                applyRankChanges(r ?? null, myPkmn, myPkmn, moveData.name, logEntries)
+                applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+              }
             }
           }
         }
@@ -758,12 +664,8 @@ export default async function handler(req, res) {
         // ── 공격 기술
         resetRankStack(myPkmn)
         const isAoe = tSlots.length >= 2
-
-        // ── aoe일 때 주사위를 딱 한 번만 굴리고 전 타겟에 재사용
         const aoeDice = isAoe ? rollD10() : null
-        if(isAoe) {
-          logEntries.push(makeLog("dice", "", { slot: mySlot, roll: aoeDice }))
-        }
+        if(isAoe) logEntries.push(makeLog("dice", "", { slot: mySlot, roll: aoeDice }))
 
         for(const tSlot of tSlots) {
           const tIdx  = data[`${tSlot}_active_idx`] ?? 0
@@ -796,14 +698,8 @@ export default async function handler(req, res) {
             continue
           }
 
-          // aoe면 미리 굴린 주사위 재사용, 단일 타겟이면 개별 롤
           let { damage, multiplier, critical, dice } = calcDamage(myPkmn, moveData.name, tPkmn, null, null, aoeDice)
-
-          // 단일 타겟일 때만 개별 주사위 로그 출력
-          if(!isAoe) {
-            logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
-          }
-
+          if(!isAoe) logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
           if(multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
           if(isRequester) { damage = Math.floor(damage * 1.15); assistUsedThisTurn = true }
@@ -829,17 +725,12 @@ export default async function handler(req, res) {
             }
           }
 
-          if(tPkmn.enduring && mainDmg >= tPkmn.hp) {
-            mainDmg = tPkmn.hp - 1
-            logEntries.push(makeLog("after_hit", `${tPkmn.name}${josa(tPkmn.name,"은는")} 버텼다!`))
-          }
+          if(tPkmn.enduring && mainDmg >= tPkmn.hp) { mainDmg = tPkmn.hp - 1; logEntries.push(makeLog("after_hit", `${tPkmn.name}${josa(tPkmn.name,"은는")} 버텼다!`)) }
           tPkmn.enduring = false
-
           tPkmn.hp = Math.max(0, tPkmn.hp - mainDmg)
 
           logEntries.push(makeLog("hit", "", { defender: tSlot }))
           logEntries.push(makeLog("hp",  "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
-
           if(multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
           if(multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
           if(critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
@@ -853,7 +744,6 @@ export default async function handler(req, res) {
             myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
             logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name,"은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
           }
-
           if(moveInfo?.effect?.recoil && mainDmg > 0) {
             const recoil = Math.max(1, Math.floor(mainDmg * moveInfo.effect.recoil))
             myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
@@ -864,10 +754,7 @@ export default async function handler(req, res) {
           if(tPkmn.hp <= 0) logEntries.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name,"은는")} 쓰러졌다!`, { slot: tSlot }))
 
           if(spillDmg > 0 && syncAllyPkmn && syncAllyPkmn.hp > 0) {
-            if(syncAllyPkmn.enduring && spillDmg >= syncAllyPkmn.hp) {
-              spillDmg = syncAllyPkmn.hp - 1
-              logEntries.push(makeLog("after_hit", `${syncAllyPkmn.name}${josa(syncAllyPkmn.name,"은는")} 버텼다!`))
-            }
+            if(syncAllyPkmn.enduring && spillDmg >= syncAllyPkmn.hp) { spillDmg = syncAllyPkmn.hp - 1; logEntries.push(makeLog("after_hit", `${syncAllyPkmn.name}${josa(syncAllyPkmn.name,"은는")} 버텼다!`)) }
             syncAllyPkmn.enduring = false
             syncAllyPkmn.hp = Math.max(0, syncAllyPkmn.hp - spillDmg)
             logEntries.push(makeLog("hit", "", { defender: syncAllySlot }))
@@ -890,21 +777,14 @@ export default async function handler(req, res) {
           }
 
           tPkmn.lastReceivedDamage = mainDmg
-          if(tPkmn.bideState) {
-            tPkmn.bideState.damage = (tPkmn.bideState.damage ?? 0) + mainDmg
-            tPkmn.bideState.lastAttackerSlot = mySlot
-          }
+          if(tPkmn.bideState) { tPkmn.bideState.damage = (tPkmn.bideState.damage ?? 0) + mainDmg; tPkmn.bideState.lastAttackerSlot = mySlot }
         }
       }
     }
     clearRankStack(myPkmn)
-
     if((myPkmn.defendTurns ?? 0) > 0) {
       myPkmn.defendTurns--
-      if(myPkmn.defendTurns <= 0) {
-        myPkmn.defending   = false
-        myPkmn.defendTurns = 0
-      }
+      if(myPkmn.defendTurns <= 0) { myPkmn.defending = false; myPkmn.defendTurns = 0 }
     }
   }
 
@@ -917,16 +797,13 @@ export default async function handler(req, res) {
   const syncUpdate = {}
   activatedSyncKeys.forEach(k => {
     const team = k.replace("sync_team","")
-    syncUpdate[k]                   = null
-    syncUpdate[`sync_used_${team}`] = true
+    syncUpdate[k] = null; syncUpdate[`sync_used_${team}`] = true
   })
 
   const newOrder     = (data.current_order ?? []).slice(1)
   const newTurnCount = (data.turn_count ?? 1) + 1
   const isEot        = newOrder.length === 0
 
-  // ── tickRanks는 라운드 마지막 턴(EOT)에만 호출
-  // 기술 사용 턴에 즉시 호출하면 turns:1 랭크가 같은 턴에 만료되는 버그 발생
   if(isEot) {
     ALL_FS.forEach(s => {
       const idx  = data[`${s}_active_idx`] ?? 0
@@ -941,8 +818,8 @@ export default async function handler(req, res) {
     ...buildEntryUpdate(entries),
     ...assistUpdate,
     ...syncUpdate,
-    current_order:     newOrder,
-    turn_count:        newTurnCount,
+    current_order: newOrder,
+    turn_count:    newTurnCount,
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
   }

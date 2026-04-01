@@ -142,7 +142,12 @@ function updateSlotUI(slot, data, isHpFromLog = false) {
   if(nameLabel) nameLabel.innerText = data[`${slotKey}_name`] ?? slot
 
   const nameEl = $(`${prefix}-active-name`)
-  if(nameEl) nameEl.innerText = pokemon.name ?? "???"
+  if(nameEl) {
+    const STATUS_LABEL = { "마비": "[마비]", "화상": "[화상]", "독": "[독]", "얼음": "[얼음]" }
+    const statusTag    = pokemon.status ? " " + (STATUS_LABEL[pokemon.status] ?? "") : ""
+    const confusionTag = (pokemon.confusion ?? 0) > 0 ? " [혼란]" : ""
+    nameEl.innerText   = (pokemon.name ?? "???") + statusTag + confusionTag
+  }
 
   const isMyTeam = prefix === "my" || prefix === "ally"
   if(isHpFromLog) {
@@ -481,6 +486,7 @@ function onMoveClick(idx, moveInfo, data) {
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
     || moveInfo?.dragonTail || moveInfo?.healPulse
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
+    || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
 
   const targetsAlly = moveInfo?.healPulse
 
