@@ -1,104 +1,191 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="../css/style.css">
-  <title>Double Battle Room 1</title>
-  <style>
-    .team-box {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .team {
-      flex: 1;
-      border: 1px solid #444;
-      border-radius: 8px;
-      padding: 10px 14px;
-    }
-    .team-label {
-      font-size: 11px;
-      color: #888;
-      margin-bottom: 8px;
-      letter-spacing: .1em;
-    }
-    .player-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
-      margin: 5px 0;
-    }
-    .ready-icon { font-size: 14px; }
-    .btn-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
-    #spectator-list {
-      margin-top: 10px;
-      font-size: 12px;
-      color: #888;
-    }
-    @media (max-width: 480px) {
-      .team-box { flex-direction: column; }
-      .btn-row  { justify-content: center; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Double Battle Room 1</title>
+
+<style>
+/* 리셋 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* 페이지 */
+.page {
+  min-height: 100vh;
+  background: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 컨테이너 */
+.container {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 20px;
+}
+
+/* 타이틀 */
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  text-align: center;
+  color: #111;
+}
+
+/* 팀 박스 */
+.team-box {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* 팀 카드 */
+.team {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+/* 팀 라벨 */
+.team-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+/* 플레이어 */
+.player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  margin: 6px 0;
+  color: #111;
+}
+
+/* 준비 상태 */
+.ready-icon {
+  font-size: 14px;
+}
+
+/* 버튼 영역 */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* 버튼 */
+.btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  background: #000;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+/* hover */
+.btn:hover {
+  background: #222;
+}
+
+/* active */
+.btn:active {
+  transform: scale(0.98);
+}
+
+/* 관전자 */
+#spectator-list {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+}
+
+/* 모바일 */
+@media (max-width: 480px) {
+  .container {
+    padding: 24px 16px;
+  }
+
+  .team-box {
+    flex-direction: column;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .btn {
+    padding: 12px;
+  }
+}
+</style>
 </head>
-<body>
+
+<body class="page">
+
 <div class="container">
-  <div class="header">
-    <div class="title">ZENITH RING</div>
-  </div>
-  <div class="screen">
-    <div class="screen-top">
-      <span>DOUBLE v1.0</span>
-      <div class="status">ONLINE</div>
-      <div class="battery"><div class="battery-level"></div></div>
-    </div>
 
-    <h2>Double Battle Room 1</h2>
+  <div class="title">Double Battle Room</div>
 
-    <div class="team-box">
-      <div class="team">
-        <div class="team-label">🔵 TEAM A</div>
-        <div class="player-row">
-          <span id="player1">Player1: 대기 중...</span>
-          <span class="ready-icon" id="player1-ready">⬜</span>
-        </div>
-        <div class="player-row">
-          <span id="player2">Player2: 대기 중...</span>
-          <span class="ready-icon" id="player2-ready">⬜</span>
-        </div>
+  <div class="team-box">
+    <div class="team">
+      <div class="team-label">TEAM A</div>
+
+      <div class="player-row">
+        <span id="player1">Player1: 대기 중...</span>
+        <span class="ready-icon" id="player1-ready">⬜</span>
       </div>
-      <div class="team">
-        <div class="team-label">🔴 TEAM B</div>
-        <div class="player-row">
-          <span id="player3">Player3: 대기 중...</span>
-          <span class="ready-icon" id="player3-ready">⬜</span>
-        </div>
-        <div class="player-row">
-          <span id="player4">Player4: 대기 중...</span>
-          <span class="ready-icon" id="player4-ready">⬜</span>
-        </div>
+
+      <div class="player-row">
+        <span id="player2">Player2: 대기 중...</span>
+        <span class="ready-icon" id="player2-ready">⬜</span>
       </div>
     </div>
 
-    <div class="btn-row">
-      <button class="btn" id="readyBtn">Ready</button>
-      <button class="btn" id="swapBtn" style="display:none">자리 이동</button>
-      <button class="btn" id="leaveBtn">Leave</button>
-    </div>
+    <div class="team">
+      <div class="team-label">TEAM B</div>
 
-    <div id="spectator-list">관전자 없음</div>
+      <div class="player-row">
+        <span id="player3">Player3: 대기 중...</span>
+        <span class="ready-icon" id="player3-ready">⬜</span>
+      </div>
+
+      <div class="player-row">
+        <span id="player4">Player4: 대기 중...</span>
+        <span class="ready-icon" id="player4-ready">⬜</span>
+      </div>
+    </div>
   </div>
-  <div class="footer">Made by Sonnet with Ampharos</div>
+
+  <div class="btn-row">
+    <button class="btn" id="readyBtn">Ready</button>
+    <button class="btn" id="swapBtn" style="display:none">자리 이동</button>
+    <button class="btn" id="leaveBtn">Leave</button>
+  </div>
+
+  <div id="spectator-list">관전자 없음</div>
+
 </div>
 
 <script>const ROOM_ID = "doublebattleroom1"</script>
 <script type="module" src="../js/doublebattleroom.js"></script>
+
 </body>
 </html>

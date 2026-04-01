@@ -79,6 +79,18 @@ function isTeamAllDead(data) {
   return myEntry.every(p => p.hp <= 0) && allyEntry.every(p => p.hp <= 0)
 }
 
+// 어시스트/싱크로 요청 불가 조건:
+// - 내 active 포켓몬 hp <= 0  이거나
+// - 아군이 pending_switches에 있음 (교체 대기 중)
+function cannotRequestSupport(data) {
+  if(!mySlot) return true
+  const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
+  const myPkmn      = data[`${mySlot}_entry`]?.[myActiveIdx]
+  const myFainted   = !myPkmn || myPkmn.hp <= 0
+  const allyPending = (data.pending_switches ?? []).includes(allyOf(mySlot))
+  return myFainted || allyPending
+}
+
 function slotToPrefix(slot) {
   if(!mySlot) return null
   if(slot === mySlot)          return "my"
@@ -311,19 +323,17 @@ function onMoveClick(idx, moveInfo, data) {
 
   const r = moveInfo?.rank
 
-  // 적군 타겟이 필요한 기술 판별
   const targetsEnemy =
-    moveInfo?.power                                                                                    // 공격 기술
-    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))   // 상대 랭크다운
-    || moveInfo?.roar                                                                                  // 울부짖기
-    || moveInfo?.leechSeed                                                                             // 씨뿌리기
-    || moveInfo?.chainBind                                                                             // 사슬묶기
-    || moveInfo?.dragonTail  
-    || moveInfo?.healPulse                                                                          // 드래곤테일
-    || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)                                          // 뽐내기 등 혼란/풀죽음
+    moveInfo?.power
+    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
+    || moveInfo?.roar
+    || moveInfo?.leechSeed
+    || moveInfo?.chainBind
+    || moveInfo?.dragonTail
+    || moveInfo?.healPulse
+    || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
 
-  // 아군 타겟이 필요한 기술 판별 (자기 자신 제외)
-  const targetsAlly = moveInfo?.healPulse  // 치유파동
+  const targetsAlly = moveInfo?.healPulse
 
   if(targetsEnemy || targetsAlly) {
     enterTargetMode(idx, data, { targetsEnemy: !!targetsEnemy, targetsAlly: !!targetsAlly })
@@ -338,10 +348,9 @@ function enterTargetMode(idx, data, { targetsEnemy = true, targetsAlly = false }
   const hint = $("target-hint")
   if(hint) hint.style.display = "block"
 
-  // 클릭 가능한 슬롯 수집
   const clickableSlots = []
   if(targetsEnemy) enemySlotsOf(mySlot).forEach(s => clickableSlots.push(s))
-  if(targetsAlly)  clickableSlots.push(allyOf(mySlot))  // 아군 (자신 제외)
+  if(targetsAlly)  clickableSlots.push(allyOf(mySlot))
 
   clickableSlots.forEach(eSlot => {
     const eActiveIdx = data[`${eSlot}_active_idx`] ?? 0
@@ -364,7 +373,6 @@ function exitTargetMode() {
   pendingMoveIdx = -1
   const hint = $("target-hint")
   if(hint) hint.style.display = "none"
-  // 적군 + 아군 prefix 전부 초기화
   ;["enemy1","enemy2","ally"].forEach(prefix => {
     const area = $(`${prefix}-pokemon-area`)
     if(!area) return
@@ -557,13 +565,18 @@ function updateAssistUI(data) {
   const used     = data[`assist_used_${myTeam}`] ?? false
   const req      = data.assist_request ?? null
   const teamDead = isTeamAllDead(data)
+  const blocked  = cannotRequestSupport(data)  // 내 hp<=0 이거나 아군 pending
 
   const reqBtn = $("assist-request-btn")
   if(reqBtn) {
     const isMyReq = req && req.from === mySlot
-    if(isSpectator || used || assist || teamDead) {
+    if(isSpectator || used || assist || teamDead || blocked) {
       reqBtn.disabled  = true
-      reqBtn.innerText = teamDead ? "사용 불가" : assist ? "🤝 어시스트 중" : used ? "지원 완료" : "지원 요청"
+      reqBtn.innerText = teamDead ? "사용 불가"
+                       : assist   ? "🤝 어시스트 중"
+                       : used     ? "지원 완료"
+                       : blocked  ? "요청 불가"
+                       :            "지원 요청"
     } else if(isMyReq) {
       reqBtn.disabled  = true
       reqBtn.innerText = "요청 중..."
@@ -631,13 +644,18 @@ function updateSyncUI(data) {
   const used     = data[`sync_used_${myTeam}`] ?? false
   const req      = data.sync_request ?? null
   const teamDead = isTeamAllDead(data)
+  const blocked  = cannotRequestSupport(data)  // 내 hp<=0 이거나 아군 pending
 
   const reqBtn = $("sync-request-btn")
   if(reqBtn) {
     const isMyReq = req && req.from === mySlot
-    if(isSpectator || used || sync || teamDead) {
+    if(isSpectator || used || sync || teamDead || blocked) {
       reqBtn.disabled  = true
-      reqBtn.innerText = teamDead ? "사용 불가" : sync ? "💠 싱크로나이즈 중" : used ? "동기화 완료" : "동기화 요청"
+      reqBtn.innerText = teamDead ? "사용 불가"
+                       : sync     ? "💠 싱크로나이즈 중"
+                       : used     ? "동기화 완료"
+                       : blocked  ? "요청 불가"
+                       :            "동기화 요청"
     } else if(isMyReq) {
       reqBtn.disabled  = true
       reqBtn.innerText = "요청 중..."

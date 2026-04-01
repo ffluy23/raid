@@ -1,11 +1,111 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>배틀룸</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+/* 메인 페이지 */
+.main-page {
+  height: 100vh;
+  background: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 컨테이너 */
+.main-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* 타이틀 */
+.logo {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 40px;
+  color: #111;
+  letter-spacing: -0.5px;
+}
+
+/* 메뉴 */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 버튼 */
+.menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: 100%;
+  padding: 16px;
+
+  border: 1px solid #ddd;
+  border-radius: 10px;
+
+  background: #fff;
+  color: #111;
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* hover */
+.menu-btn:hover {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+/* active */
+.menu-btn:active {
+  transform: scale(0.98);
+}
+
+/* 모바일 */
+@media (max-width: 480px) {
+  .main-container {
+    padding: 24px 16px;
+  }
+
+  .logo {
+    font-size: 24px;
+    margin-bottom: 30px;
+  }
+
+  .menu-btn {
+    padding: 14px;
+    font-size: 14px;
+  }
+}
+</style>
+
+<title>배틀룸</title>
 </head>
-<body>
-    <button onclick="location.href='pages/doublebattleroom1.html'">더블배틀룸</button>
+
+<body class="main-page">
+
+  <div class="main-container">
+
+    <div class="logo">DoubleBattle</div>
+
+    <div class="menu">
+      <button class="menu-btn" onclick="location.href='pages/doublebattleroom1.html'">
+        더블배틀룸
+      </button>
+    </div>
+
+  </div>
+
 </body>
 </html>
