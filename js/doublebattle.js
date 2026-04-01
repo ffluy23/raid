@@ -263,8 +263,14 @@ async function processLogQueue() {
     if(pendingRoomData) {
       const data = pendingRoomData
       pendingRoomData = null
-      // 약간 딜레이 줘서 마지막 애니메이션이 끝난 후 반영
-      setTimeout(() => applyRoomData(data), 80)
+      setTimeout(async () => {
+        // 로그 다 끝난 후 dice_event 있으면 주사위 먼저
+        if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
+          lastDiceEventTs = data.dice_event.ts
+          await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
+        }
+        applyRoomData(data)
+      }, 80)
     }
     return
   }
@@ -858,12 +864,6 @@ function listenRoom() {
     const data = snap.data()
     if(!data || !data.p1_entry) return
 
-    // 라운드 시작 주사위
-    if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
-      lastDiceEventTs = data.dice_event.ts
-      await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
-    }
-
     // 턴 상태 즉시 세팅 (UI 렌더링과 분리)
     if(!isSpectator && !data.game_over) {
       const order   = data.current_order ?? []
@@ -884,6 +884,19 @@ function listenRoom() {
       if(order.length === 0 && pending.length === 0 && data.game_started) {
         tryStartRound()
       }
+    }
+
+    // 라운드 시작 주사위: 로그 큐가 빈 후에 실행
+    if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
+      if(!isProcessing && logQueue.length === 0) {
+        lastDiceEventTs = data.dice_event.ts
+        await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
+        applyRoomData(data)
+      } else {
+        // 로그 재생 중이면 pending으로 저장 (큐 끝나고 applyRoomData에서 처리)
+        pendingRoomData = data
+      }
+      return
     }
 
     // UI 렌더링: 로그 큐 비어있으면 바로, 재생 중이면 pending

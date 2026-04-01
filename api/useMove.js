@@ -83,9 +83,9 @@ function clearRankStack(pokemon) {
 function tickRanks(pokemon, logEntries) {
   if(!pokemon.ranks) return
   const r = pokemon.ranks
-  if(r.atkTurns > 0) { r.atkTurns--; if(!r.atkTurns) { r.atk = pokemon.attack  ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 공격이 원래대로 돌아왔다!`)) } }
-  if(r.defTurns > 0) { r.defTurns--; if(!r.defTurns) { r.def = pokemon.defense ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 방어가 원래대로 돌아왔다!`)) } }
-  if(r.spdTurns > 0) { r.spdTurns--; if(!r.spdTurns) { r.spd = pokemon.speed   ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드가 원래대로 돌아왔다!`)) } }
+  if(r.atkTurns > 0) { r.atkTurns--; if(!r.atkTurns) { r.atk = pokemon.attack  ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 공격${josa("공격","이가")} 원래대로 돌아왔다!`)) } }
+  if(r.defTurns > 0) { r.defTurns--; if(!r.defTurns) { r.def = pokemon.defense ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 방어${josa("방어","이가")} 원래대로 돌아왔다!`)) } }
+  if(r.spdTurns > 0) { r.spdTurns--; if(!r.spdTurns) { r.spd = pokemon.speed   ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드${josa("스피드","이가")} 원래대로 돌아왔다!`)) } }
 }
 
 function applyRankChanges(r, self, target, moveName, logEntries) {
@@ -128,12 +128,12 @@ function applyRankChanges(r, self, target, moveName, logEntries) {
     const max   = baseStat * MAX_MULT
     if(delta > 0) {
       const p = obj[key]; obj[key] = Math.min(max, obj[key] + delta); obj[`${key}Turns`] = r.turns ?? 2
-      logEntries.push(makeLog("normal", `${name}의 ${label}이 ${obj[key] - p} 상승했다!`))
+      logEntries.push(makeLog("normal", `${name}의 ${label}${josa(label,"이가")} ${obj[key] - p} 상승했다!`))
     } else if(delta < 0) {
-      if(obj[key] <= MIN) logEntries.push(makeLog("normal", `${name}의 ${label}은 더 이상 내려가지 않는다!`))
+      if(obj[key] <= MIN) logEntries.push(makeLog("normal", `${name}의 ${label}${josa(label,"은는")} 더 이상 내려가지 않는다!`))
       else {
         const p = obj[key]; obj[key] = Math.max(MIN, obj[key] + delta); obj[`${key}Turns`] = r.turns ?? 2
-        logEntries.push(makeLog("normal", `${name}의 ${label}이 ${p - obj[key]} 하락했다!`))
+        logEntries.push(makeLog("normal", `${name}의 ${label}${josa(label,"이가")} ${p - obj[key]} 하락했다!`))
       }
     }
   }
@@ -235,7 +235,7 @@ function handleSpecialNonAttack(moveInfo, myPkmn, tSlots, entries, data, logEntr
     if(tPkmn.seeded) { logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"은는")} 이미 씨뿌리기 상태다!`)) }
     else {
       tPkmn.seeded     = true
-      tPkmn.seederSlot = tSlot
+      tPkmn.seederSlot = mySlot  // 씨를 뿌린 쪽 슬롯
       logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"의")} 몸에 씨를 뿌렸다!`))
     }
     return { handled:true }
@@ -612,6 +612,64 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok:true })
   }
 
+  // ── 구르기 자동처리 (rollState.active 면 기술 무시하고 구르기 자동 진행) ──
+  const moveInfo_rollCheck = moves[moveData?.name]
+  if(myPkmn.rollState?.active && !(moveInfo_rollCheck?.rollout)) {
+    const rollState = myPkmn.rollState
+    const rollTurn  = rollState.turn + 1
+    const rollPower = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
+
+    logEntries.push(makeLog("move_announce", `${myPkmn.name}의 구르기! (${rollTurn}번째)`))
+
+    const enemySlots = enemySlotsOf(mySlot)
+    for(const eSlot of enemySlots) {
+      const eIdx  = data[`${eSlot}_active_idx`] ?? 0
+      const ePkmn = entries[eSlot][eIdx]
+      if(!ePkmn || ePkmn.hp <= 0) continue
+
+      const { hit, hitType } = calcHit(myPkmn, { accuracy: 90, alwaysHit: false }, ePkmn)
+      if(!hit) {
+        logEntries.push(makeLog("normal", hitType === "evaded"
+          ? `${ePkmn.name}에게는 맞지 않았다!`
+          : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
+        myPkmn.rollState = { active: false, turn: 0 }
+        break
+      }
+
+      const defTypes = Array.isArray(ePkmn.type) ? ePkmn.type : [ePkmn.type]
+      let mult = 1
+      for(const dt of defTypes) mult *= getTypeMultiplier("바위", dt)
+
+      if(mult === 0) {
+        logEntries.push(makeLog("normal", `${ePkmn.name}에게는 효과가 없다…`))
+        myPkmn.rollState = { active: false, turn: 0 }
+        break
+      }
+      const dmg = Math.floor(rollPower * mult)
+      ePkmn.hp = Math.max(0, ePkmn.hp - dmg)
+      logEntries.push(makeLog("hit", "", { defender: eSlot }))
+      logEntries.push(makeLog("hp",  "", { slot: eSlot, hp: ePkmn.hp, maxHp: ePkmn.maxHp }))
+      logEntries.push(makeLog("after_hit", `구르기 ${rollTurn}번째 (${rollPower} 데미지)!`))
+      if(ePkmn.hp <= 0) logEntries.push(makeLog("faint", `${ePkmn.name}${josa(ePkmn.name,"은는")} 쓰러졌다!`, { slot: eSlot }))
+      myPkmn.rollState = rollTurn >= 3 ? { active: false, turn: 0 } : { active: true, turn: rollTurn }
+    }
+
+    const { assistEventTs: aTs, syncEventTs: sTs } = await writeLogs(roomId, logEntries)
+    const newOrder = (data.current_order ?? []).slice(1)
+    const update = {
+      ...buildEntryUpdate(entries),
+      current_order: newOrder,
+      turn_count: (data.turn_count ?? 1) + 1,
+      ...(aTs !== null ? { assist_event: { ts: aTs } } : {}),
+      ...(sTs  !== null ? { sync_event:   { ts: sTs  } } : {}),
+    }
+    ALL_FS.forEach(s => { if(data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`] })
+    const winTeam = checkWin(entries)
+    if(winTeam) { update.game_over = true; update.winner_team = winTeam; update.current_order = [] }
+    await roomRef.update(update)
+    return res.status(200).json({ ok:true })
+  }
+
   const pre = checkPreActionStatus(myPkmn)
   pre.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
@@ -810,6 +868,15 @@ export default async function handler(req, res) {
     }
     tickRanks(myPkmn, logEntries)
     clearRankStack(myPkmn)
+
+    // 방어 턴 틱 (매 턴 감소, 0이 되면 해제)
+    if((myPkmn.defendTurns ?? 0) > 0) {
+      myPkmn.defendTurns--
+      if(myPkmn.defendTurns <= 0) {
+        myPkmn.defending   = false
+        myPkmn.defendTurns = 0
+      }
+    }
   }
 
   const assistUpdate = {}
