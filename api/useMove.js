@@ -3,15 +3,13 @@ import { moves } from "../lib/moves.js"
 import { getTypeMultiplier } from "../lib/typeChart.js"
 import {
   josa, applyMoveEffect, checkPreActionStatus,
-  checkConfusion, applyEndOfTurnDamage, getStatusSpdPenalty,
-  applyStatus, applyVolatile, tickVolatiles
+  checkConfusion, applyEndOfTurnDamage, getStatusSpdPenalty
 } from "../lib/effecthandler.js"
 import {
   ALL_FS, deepCopyEntries, buildEntryUpdate, checkWin, collectFaintedSlots,
   teamOf, allySlot, roomName, rollD10, getActiveRank, writeLogs, corsHeaders,
   handleEot
 } from "../lib/gameUtils.js"
-
 // ── 유틸 ──────────────────────────────────────────────────────────────
 function defaultRanks() {
   return { atk: 0, atkTurns: 0, def: 0, defTurns: 0, spd: 0, spdTurns: 0 }
