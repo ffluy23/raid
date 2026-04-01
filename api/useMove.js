@@ -68,13 +68,12 @@ function tickRanks(pokemon, logEntries) {
   if(r.atkTurns > 0) { r.atkTurns--; if(!r.atkTurns) { r.atk = pokemon.attack  ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 공격${josa("공격","이가")} 원래대로 돌아왔다!`)) } }
   if(r.defTurns > 0) { r.defTurns--; if(!r.defTurns) { r.def = pokemon.defense ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 방어${josa("방어","이가")} 원래대로 돌아왔다!`)) } }
   if(r.spdTurns > 0) { r.spdTurns--; if(!r.spdTurns) { r.spd = pokemon.speed   ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드${josa("스피드","이가")} 원래대로 돌아왔다!`)) } }
-  // 날개쉬기 타입 복원
   if((pokemon.roostTurns ?? 0) > 0) {
     pokemon.roostTurns--
     if(pokemon.roostTurns <= 0) {
       if(pokemon._origType !== undefined) {
         pokemon.type = pokemon._origType
-        delete pokemon._origType  // ✅ undefined 대신 delete로 키 제거 (Firestore undefined 오류 방지)
+        delete pokemon._origType
       }
       pokemon.roostTurns = 0
     }
@@ -151,10 +150,11 @@ function calcHit(atk, moveInfo, def) {
   return Math.random()*100 < ev ? { hit:false, hitType:"evaded" } : { hit:true, hitType:"hit" }
 }
 
-function calcDamage(atk, moveName, def, powerOverride=null, atkStatOverride=null) {
+// diceOverride: aoe 기술에서 첫 타겟의 주사위를 나머지에 재사용할 때 넘김
+function calcDamage(atk, moveName, def, powerOverride=null, atkStatOverride=null, diceOverride=null) {
   const move = moves[moveName]
   if(!move) return { damage:0, multiplier:1, stab:false, critical:false, dice:0 }
-  const dice     = rollD10()
+  const dice     = diceOverride ?? rollD10()
   const defTypes = Array.isArray(def.type) ? def.type : [def.type]
   let mult = 1
   for(const dt of defTypes) mult *= getTypeMultiplier(move.type, dt)
@@ -202,7 +202,7 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
     myPkmn.hp      = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
     logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name,"은는")} HP를 회복했다! (+${heal})`, { slot: myPkmn._slot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
     const types = Array.isArray(myPkmn.type) ? [...myPkmn.type] : [myPkmn.type]
-    myPkmn._origType  = myPkmn.type   // ✅ 실제 타입 값이 저장되므로 Firestore OK
+    myPkmn._origType  = myPkmn.type
     myPkmn.type       = types.includes("비행") ? types.filter(t => t !== "비행") : ["노말"]
     if(myPkmn.type.length === 0) myPkmn.type = ["노말"]
     myPkmn.roostTurns = 1
@@ -740,6 +740,12 @@ export default async function handler(req, res) {
         resetRankStack(myPkmn)
         const isAoe = tSlots.length >= 2
 
+        // ── aoe일 때 주사위를 딱 한 번만 굴리고 전 타겟에 재사용
+        const aoeDice = isAoe ? rollD10() : null
+        if(isAoe) {
+          logEntries.push(makeLog("dice", "", { slot: mySlot, roll: aoeDice }))
+        }
+
         for(const tSlot of tSlots) {
           const tIdx  = data[`${tSlot}_active_idx`] ?? 0
           const tPkmn = entries[tSlot][tIdx]
@@ -771,9 +777,13 @@ export default async function handler(req, res) {
             continue
           }
 
-          let { damage, multiplier, critical, dice } = calcDamage(myPkmn, moveData.name, tPkmn)
+          // aoe면 미리 굴린 주사위 재사용, 단일 타겟이면 개별 롤
+          let { damage, multiplier, critical, dice } = calcDamage(myPkmn, moveData.name, tPkmn, null, null, aoeDice)
 
-          logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
+          // 단일 타겟일 때만 개별 주사위 로그 출력
+          if(!isAoe) {
+            logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
+          }
 
           if(multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
