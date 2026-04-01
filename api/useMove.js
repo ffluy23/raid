@@ -6,7 +6,7 @@ import {
   checkConfusion, applyEndOfTurnDamage, getStatusSpdPenalty
 } from "../lib/effecthandler.js"
 import {
-  ALL_FS, deepCopyEntries, buildEntryUpdate, checkWin, collectFaintedSlots,
+  ALL_FS, deepCopyEntries, buildEntryUpdate, checkWin,
   teamOf, allySlot, roomName, rollD10, getActiveRank, corsHeaders,
   handleEot
 } from "../lib/gameUtils.js"
@@ -30,7 +30,6 @@ async function writeLogs(roomId, logEntries) {
   return { assistEventTs, syncEventTs }
 }
 
-// ── ranks 구조: 보정치(±정수)만 저장, 기본값 0
 function defaultRanks() {
   return { atk:0, atkTurns:0, def:0, defTurns:0, spd:0, spdTurns:0 }
 }
@@ -518,6 +517,10 @@ export default async function handler(req, res) {
   const moveData = myPkmn.moves?.[moveIdx]
   if(!moveData || moveData.pp <= 0) return res.status(403).json({ error: "사용 불가 기술" })
 
+  if(myPkmn.chainBound && moveData.name === myPkmn.chainBound.moveName) {
+    return res.status(403).json({ error: "사슬묶기로 사용 불가" })
+  }
+
   const myTeam    = teamOf(mySlot)
   const assistKey = `assist_team${myTeam}`
   const assist    = data[assistKey] ?? null
@@ -624,7 +627,6 @@ export default async function handler(req, res) {
       const tSlots = targetSlots ?? []
 
       if(!moveInfo?.power) {
-        // ── 비공격 기술
         const specialResult = handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
         if(!specialResult.handled) {
@@ -645,9 +647,7 @@ export default async function handler(req, res) {
               applyMoveEffect(moveInfo?.effect, myPkmn, tPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
             }
           } else {
-            // ── tSlots 없을 때: targetSelf: false인 기술은 자기한테 적용 안 함 ──
             if(moveInfo?.targetSelf === false) {
-              // 상대 대상 기술인데 타겟이 없는 경우 (클라이언트에서 타겟 안 보낸 경우)
               logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
             } else {
               if(!moveInfo?.alwaysHit && Math.random()*100 >= (moveInfo?.accuracy ?? 100)) {
@@ -661,7 +661,6 @@ export default async function handler(req, res) {
         }
 
       } else {
-        // ── 공격 기술
         resetRankStack(myPkmn)
         const isAoe = tSlots.length >= 2
         const aoeDice = isAoe ? rollD10() : null
@@ -808,7 +807,15 @@ export default async function handler(req, res) {
     ALL_FS.forEach(s => {
       const idx  = data[`${s}_active_idx`] ?? 0
       const pkmn = entries[s][idx]
-      if(pkmn) tickRanks(pkmn, logEntries)
+      if(!pkmn) return
+      tickRanks(pkmn, logEntries)
+      if(pkmn.chainBound) {
+        pkmn.chainBound.turnsLeft--
+        if(pkmn.chainBound.turnsLeft <= 0) {
+          pkmn.chainBound = null
+          logEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name,"의")} 사슬묶기가 풀렸다!`))
+        }
+      }
     })
   }
 
