@@ -249,8 +249,9 @@ function typeText(logEl, text) {
 
 // ── 로그 큐 처리 ─────────────────────────────────
 function enqueueLogs(entries) {
-  // ts 순 정렬 후 추가
   entries.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+  // type 없는 옛날 로그도 normal로 처리 (startRound 등 하위 호환)
+  entries.forEach(e => { if(!e.type) e.type = "normal" })
   logQueue.push(...entries)
   processLogQueue()
 }
@@ -258,11 +259,12 @@ function enqueueLogs(entries) {
 async function processLogQueue() {
   if(isProcessing) return
   if(logQueue.length === 0) {
-    // 큐 비면 pendingRoomData 반영
+    // 큐가 완전히 빌 때 pendingRoomData 반영
     if(pendingRoomData) {
       const data = pendingRoomData
       pendingRoomData = null
-      applyRoomData(data)
+      // 약간 딜레이 줘서 마지막 애니메이션이 끝난 후 반영
+      setTimeout(() => applyRoomData(data), 80)
     }
     return
   }
@@ -274,7 +276,8 @@ async function processLogQueue() {
     console.warn("logEntry 처리 오류:", e)
   }
   isProcessing = false
-  setTimeout(processLogQueue, 40)
+  // 엔트리 사이 간격 (너무 짧으면 버튼 상태 갱신 타이밍 꼬임)
+  setTimeout(processLogQueue, 50)
 }
 
 // ── HP 바 애니메이션 (부드럽게) ──────────────────
@@ -779,34 +782,8 @@ function applyRoomData(data) {
   }
 
   if(data.game_over) {
-    // 로그 큐가 다 끝난 후 게임 종료 처리
     showGameOver(data)
     return
-  }
-
-  if(!isSpectator) {
-    const order   = data.current_order ?? []
-    const pending = data.pending_switches ?? []
-    const wasMyTurn   = myTurn
-    const isMyTurnNow = order[0] === mySlot
-    myTurn = isMyTurnNow
-
-    if(!wasMyTurn && isMyTurnNow) actionDone = false
-    if(pending.includes(mySlot))  actionDone = false
-
-    if(myTurn && !actionDone) {
-      const myEntry = data[`${mySlot}_entry`] ?? []
-      const allDead = myEntry.every(p => p.hp <= 0)
-      if(allDead) {
-        actionDone = true
-        doSkipTurn()
-        return
-      }
-    }
-
-    if(order.length === 0 && pending.length === 0 && data.game_started && !data.game_over) {
-      tryStartRound()
-    }
   }
 }
 
@@ -827,7 +804,8 @@ function listenLogs(gameStartedAt) {
 }
 
 // ── listenRoom: Firestore 변경 감지 ─────────────
-// HP 직접 반영 X — 큐 재생이 끝난 후 applyRoomData 호출
+// 턴 상태(myTurn/actionDone)는 즉시 세팅 -> 버튼이 로그 재생 중에도 풀림
+// HP/포트레이트 등 무거운 UI는 큐 끝난 후 applyRoomData에서 처리
 let lastDiceEventTs = 0
 
 function listenRoom() {
@@ -835,13 +813,35 @@ function listenRoom() {
     const data = snap.data()
     if(!data || !data.p1_entry) return
 
-    // 라운드 시작 주사위 (dice_event는 startRound에서만)
+    // 라운드 시작 주사위
     if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
       lastDiceEventTs = data.dice_event.ts
       await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
     }
 
-    // 로그 큐가 비어있으면 바로 반영, 처리 중이면 pending으로 저장
+    // 턴 상태 즉시 세팅 (UI 렌더링과 분리)
+    if(!isSpectator && !data.game_over) {
+      const order   = data.current_order ?? []
+      const pending = data.pending_switches ?? []
+      const wasMyTurn   = myTurn
+      const isMyTurnNow = order[0] === mySlot
+      myTurn = isMyTurnNow
+      if(!wasMyTurn && isMyTurnNow) actionDone = false
+      if(pending.includes(mySlot))  actionDone = false
+      // 내 턴인데 포켓몬 전멸 -> skipTurn
+      if(myTurn && !actionDone) {
+        const myEntry = data[`${mySlot}_entry`] ?? []
+        if(myEntry.every(p => p.hp <= 0)) {
+          actionDone = true; doSkipTurn()
+        }
+      }
+      // 라운드 시작 트리거
+      if(order.length === 0 && pending.length === 0 && data.game_started) {
+        tryStartRound()
+      }
+    }
+
+    // UI 렌더링: 로그 큐 비어있으면 바로, 재생 중이면 pending
     if(!isProcessing && logQueue.length === 0) {
       applyRoomData(data)
     } else {
