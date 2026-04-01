@@ -460,6 +460,17 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
+  // ── 적 전체공격 (aoeEnemy: true) — 아군 제외, 적 전원에게 자동 타겟 ──
+  if(moveInfo?.aoeEnemy) {
+    const enemyTargets = enemySlotsOf(mySlot).filter(s => {
+      const activeIdx = data[`${s}_active_idx`] ?? 0
+      const p = data[`${s}_entry`]?.[activeIdx]
+      return p && p.hp > 0
+    })
+    doUseMove(idx, enemyTargets, data)
+    return
+  }
+
   const r = moveInfo?.rank
   const targetsEnemy =
     moveInfo?.power
