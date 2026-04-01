@@ -966,7 +966,7 @@ onAuthStateChanged(auth, async user => {
   if(window.initDoubleChat) {
     const userSnap = await getDoc(doc(db, "users", myUid))
     window.__myDisplayName = userSnap.data()?.nickname ?? myUid.slice(0, 6)
-    window.initDoubleChat({ db, ROOM_ID, myUid, mySlot, isSpectator })
+    window.initDoubleChat({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt: data?.game_started_at ?? 0 })
   }
 
   listenLogs(data?.game_started_at ?? 0)
