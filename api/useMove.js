@@ -609,6 +609,29 @@ export default async function handler(req, res) {
   pre.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
   if(!pre.blocked) {
+
+    // ── 사슬묶기 체크: 묶인 기술이면 행동 차단 ──────────────────────
+    if(myPkmn.chainBound) {
+      if(moveData.name === myPkmn.chainBound.moveName) {
+        logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} ${myPkmn.chainBound.moveName}${josa(myPkmn.chainBound.moveName,"을를")} 사용할 수 없다!`))
+        myPkmn.chainBound.turnsLeft--
+        if(myPkmn.chainBound.turnsLeft <= 0) {
+          myPkmn.chainBound = null
+          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"의")} 사슬묶기가 풀렸다!`))
+        }
+        const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
+        return res.status(200).json({ ok:true, ...(winTeam ? { winTeam } : {}) })
+      } else {
+        // 다른 기술 쓰면 사슬묶기 턴만 차감
+        myPkmn.chainBound.turnsLeft--
+        if(myPkmn.chainBound.turnsLeft <= 0) {
+          myPkmn.chainBound = null
+          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"의")} 사슬묶기가 풀렸다!`))
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     const conf = checkConfusion(myPkmn)
     conf.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
@@ -645,9 +668,7 @@ export default async function handler(req, res) {
               applyMoveEffect(moveInfo?.effect, myPkmn, tPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
             }
           } else {
-            // ── tSlots 없을 때: targetSelf: false인 기술은 자기한테 적용 안 함 ──
             if(moveInfo?.targetSelf === false) {
-              // 상대 대상 기술인데 타겟이 없는 경우 (클라이언트에서 타겟 안 보낸 경우)
               logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
             } else {
               if(!moveInfo?.alwaysHit && Math.random()*100 >= (moveInfo?.accuracy ?? 100)) {

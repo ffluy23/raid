@@ -1,7 +1,7 @@
 // effecthandler.js
 
 export function statusName(status) {
-  const map = { poison: "독", burn: "화상", paralysis: "마비", frozen: "얼음" }
+  const map = { "독": "독", "화상": "화상", "마비": "마비", "얼음": "얼음" }
   return map[status] ?? status
 }
 
@@ -31,7 +31,7 @@ export function applyVolatile(pokemon, volatile) {
   if (pokemon.hp <= 0) return []
   if (volatile === "혼란") {
     if ((pokemon.confusion ?? 0) > 0) return []
-    pokemon.confusion = Math.floor(Math.random() * 3) + 1
+    pokemon.confusion = Math.floor(Math.random() * 3) + 2  // 2~4턴
     return [`${pokemon.name}${josa(pokemon.name, "은는")} 혼란에 빠졌다!`]
   }
   if (volatile === "풀죽음") {
@@ -42,14 +42,12 @@ export function applyVolatile(pokemon, volatile) {
   return []
 }
 
-// ── damage 파라미터 추가 → drain75 지원
 export function applyMoveEffect(moveEffect, attacker, defender, damage = 0) {
   if (!moveEffect) return []
   if (defender.hp <= 0) return []
 
   const msgs = []
 
-  // 흡수 (가한 피해의 drain 비율만큼 회복)
   if (moveEffect.drain) {
     const heal = Math.floor(damage * moveEffect.drain)
     if (heal > 0) {
@@ -59,12 +57,10 @@ export function applyMoveEffect(moveEffect, attacker, defender, damage = 0) {
     return msgs
   }
 
-  // 상태이상 부여
   if (moveEffect.status && Math.random() < moveEffect.chance) {
     msgs.push(...applyStatus(defender, moveEffect.status))
   }
 
-  // 상태변화 부여
   if (moveEffect.volatile && Math.random() < moveEffect.chance) {
     msgs.push(...applyVolatile(defender, moveEffect.volatile))
   }
@@ -79,13 +75,15 @@ export function checkPreActionStatus(pokemon) {
     msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 풀이 죽어서 움직일 수 없다!`)
     return { blocked: true, msgs, statusCleared: false }
   }
-  if (pokemon.status === "paralysis") {
+  // 마비: 25% 확률로 행동 불가
+  if (pokemon.status === "마비") {
     if (Math.random() < 0.25) {
       msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 몸이 저려서 움직일 수 없다!`)
       return { blocked: true, msgs, statusCleared: false }
     }
   }
-  if (pokemon.status === "frozen") {
+  // 얼음: 20% 확률로 해제, 아니면 행동 불가
+  if (pokemon.status === "얼음") {
     if (Math.random() < 0.20) {
       pokemon.status = null
       msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 얼음 상태에서 회복됐다!`)
@@ -103,20 +101,29 @@ export function checkConfusion(pokemon) {
     pokemon.confusion = 0
     return { selfHit: false, damage: 0, msgs: [], fainted: false }
   }
+
+  const msgs = []
+  msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 혼란 상태다!`)
+
+  let selfHit = false, damage = 0, fainted = false
+
+  if (Math.random() < 1 / 3) {
+    damage = (pokemon.attack ?? 3) * 2
+    pokemon.hp = Math.max(0, pokemon.hp - damage)
+    msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 영문도 모른 채 자신을 공격했다! (${damage} 데미지)`)
+    fainted = pokemon.hp <= 0
+    if (fainted) msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 쓰러졌다!`)
+    selfHit = true
+  }
+
+  // 자해/행동 판정 이후에 턴 차감
   pokemon.confusion--
   if (pokemon.confusion <= 0) {
     pokemon.confusion = 0
-    return { selfHit: false, damage: 0, msgs: [], fainted: false }
+    msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 혼란에서 깨어났다!`)
   }
-  if (Math.random() < 1 / 3) {
-    const damage = (pokemon.attack ?? 3) * 2
-    pokemon.hp = Math.max(0, pokemon.hp - damage)
-    const msgs = [`${pokemon.name}${josa(pokemon.name, "은는")} 영문도 모른 채 자신을 공격했다! (${damage} 데미지)`]
-    const fainted = pokemon.hp <= 0
-    if (fainted) msgs.push(`${pokemon.name}${josa(pokemon.name, "은는")} 쓰러졌다!`)
-    return { selfHit: true, damage, msgs, fainted }
-  }
-  return { selfHit: false, damage: 0, msgs: [], fainted: false }
+
+  return { selfHit, damage, msgs, fainted }
 }
 
 export function applyEndOfTurnDamage(entries) {
@@ -125,7 +132,7 @@ export function applyEndOfTurnDamage(entries) {
   for (const entry of entries) {
     for (const pkmn of entry) {
       if (pkmn.hp <= 0) continue
-      if (pkmn.status !== "poison" && pkmn.status !== "burn") continue
+      if (pkmn.status !== "독" && pkmn.status !== "화상") continue
       const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 16))
       pkmn.hp = Math.max(0, pkmn.hp - dmg)
       msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} ${statusName(pkmn.status)} 때문에 ${dmg} 데미지를 입었다!`)
@@ -140,8 +147,9 @@ export function applyWeatherEffect(moveEffect) {
   return { weather: moveEffect.weather, msgs: [`날씨가 ${moveEffect.weather}(으)로 바뀌었다!`] }
 }
 
+// 마비: 스피드 -1, 얼음: 스피드 -3
 export function getStatusSpdPenalty(pokemon) {
-  if (pokemon.status === "paralysis") return 1
-  if (pokemon.status === "frozen") return 3
+  if (pokemon.status === "마비") return 1
+  if (pokemon.status === "얼음") return 3
   return 0
 }
