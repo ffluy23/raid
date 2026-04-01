@@ -447,6 +447,19 @@ let pendingMoveIdx = -1
 function onMoveClick(idx, moveInfo, data) {
   if(actionDone) return
 
+  // ── 전체공격 (aoe: true) — 자신 제외 생존 중인 전원에게 자동 타겟 ──
+  if(moveInfo?.aoe) {
+    const allSlots = ["p1", "p2", "p3", "p4"]
+    const aoeTargets = allSlots.filter(s => {
+      if(s === mySlot) return false
+      const activeIdx = data[`${s}_active_idx`] ?? 0
+      const p = data[`${s}_entry`]?.[activeIdx]
+      return p && p.hp > 0
+    })
+    doUseMove(idx, aoeTargets, data)
+    return
+  }
+
   const r = moveInfo?.rank
   const targetsEnemy =
     moveInfo?.power
