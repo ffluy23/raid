@@ -92,7 +92,6 @@ function cannotRequestSupport(data) {
   return myFainted || allyPending
 }
 
-// 관전자(mySlot=null)는 p1=my, p2=ally, p3=enemy1, p4=enemy2 고정 매핑
 const SPECTATOR_PREFIX = { p1: "my", p2: "ally", p3: "enemy1", p4: "enemy2" }
 
 function slotToPrefix(slot) {
@@ -351,14 +350,13 @@ function animateAttackDice(slot, finalRoll) {
         clearInterval(iv)
         diceEl.innerText = finalRoll
         diceEl.classList.remove("pop"); void diceEl.offsetWidth; diceEl.classList.add("pop")
-        playSound(SFX_DICE)  // 주사위 확정 효과음
+        playSound(SFX_DICE)
         setTimeout(() => { wrap.style.display = "none"; resolve() }, 900)
       }
     }, 55)
   })
 }
 
-// 라운드 시작 주사위 (4명 동시)
 function animateRoundDice(rolls, slots) {
   return new Promise(resolve => {
     const wrap = $("dice-wrap")
@@ -385,7 +383,7 @@ function animateRoundDice(rolls, slots) {
             el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop")
           }
         })
-        playSound(SFX_DICE)  // 라운드 주사위 확정 효과음
+        playSound(SFX_DICE)
         setTimeout(() => { wrap.style.display = "none"; resolve() }, 1600)
       }
     }, 60)
@@ -422,6 +420,7 @@ function updateMoveButtons(data) {
   const myPokemon   = data[`${mySlot}_entry`]?.[myActiveIdx]
   const fainted     = !myPokemon || myPokemon.hp <= 0
   const movesArr    = myPokemon?.moves ?? []
+  const chainBound  = myPokemon?.chainBound ?? null  // 사슬묶기 상태
 
   for(let i = 0; i < 4; i++) {
     const btn = $(`move-btn-${i}`)
@@ -433,6 +432,23 @@ function updateMoveButtons(data) {
     const mv       = movesArr[i]
     const moveInfo = moves[mv.name] ?? {}
     const acc      = moveInfo.alwaysHit ? "필중" : `${moveInfo.accuracy ?? 100}%`
+
+    // ── 사슬묶기 당한 기술인지 체크 ──────────────────────────────
+    const isChainBlocked = !!(chainBound && chainBound.moveName === mv.name)
+
+    if(isChainBlocked) {
+      btn.innerHTML = `
+        <span style="display:block;font-size:13px;font-weight:bold">${mv.name} 🔗</span>
+        <span style="display:block;font-size:10px;opacity:.85">사슬묶기 중!</span>
+      `
+      btn.style.setProperty("--btn-color", "#666")
+      btn.style.background = "#555"
+      btn.style.boxShadow  = "inset 0 0 0 2px white, 0 0 0 2px #666"
+      btn.disabled = true
+      btn.onclick  = null
+      continue
+    }
+    // ─────────────────────────────────────────────────────────────
 
     btn.innerHTML = `
       <span style="display:block;font-size:13px;font-weight:bold">${mv.name}</span>
@@ -455,7 +471,6 @@ let pendingMoveIdx = -1
 function onMoveClick(idx, moveInfo, data) {
   if(actionDone) return
 
-  // ── 전체공격 (aoe: true) — 자신 제외 생존 중인 전원에게 자동 타겟 ──
   if(moveInfo?.aoe) {
     const allSlots = ["p1", "p2", "p3", "p4"]
     const aoeTargets = allSlots.filter(s => {
@@ -468,7 +483,6 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
-  // ── 적 전체공격 (aoeEnemy: true) — 아군 제외, 적 전원에게 자동 타겟 ──
   if(moveInfo?.aoeEnemy) {
     const enemyTargets = enemySlotsOf(mySlot).filter(s => {
       const activeIdx = data[`${s}_active_idx`] ?? 0
@@ -824,7 +838,6 @@ function applyRoomData(data) {
 
 // ── listenLogs ────────────────────────────────────
 function listenLogs(gameStartedAt) {
-  // 입장 시각 기록 — 이 시각 이전 로그는 UI 재생 없이 스킵
   const joinedAt = Date.now()
   let firstSnapshot = true
 
@@ -837,7 +850,6 @@ function listenLogs(gameStartedAt) {
       if(gameStartedAt && logData.ts < gameStartedAt) return
       renderedLogIds.add(d.id)
 
-      // 첫 스냅샷에서 이미 존재하던 로그는 스킵 (UI는 applyRoomData로 이미 렌더링됨)
       if(firstSnapshot) return
 
       newEntries.push(logData)
@@ -879,7 +891,6 @@ function listenRoom() {
         }
       }
 
-      // ── 라운드 시작 트리거: intro_done이 true일 때만 ──
       if(order.length === 0 && pending.length === 0 && data.game_started && data.intro_done) {
         tryStartRound()
       }
@@ -982,7 +993,6 @@ onAuthStateChanged(auth, async user => {
     window.initDoubleChat({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt: data?.game_started_at ?? 0 })
   }
 
-  // 중간 입장 시 현재 상태 즉시 렌더링 (로그 큐 재생 전에 UI 먼저 표시)
   if(data?.p1_entry) {
     applyRoomData(data)
   }

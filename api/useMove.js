@@ -30,7 +30,6 @@ async function writeLogs(roomId, logEntries) {
   return { assistEventTs, syncEventTs }
 }
 
-// ── ranks 구조: 보정치(±정수)만 저장, 기본값 0
 function defaultRanks() {
   return { atk:0, atkTurns:0, def:0, defTurns:0, spd:0, spdTurns:0 }
 }
@@ -518,6 +517,11 @@ export default async function handler(req, res) {
   const moveData = myPkmn.moves?.[moveIdx]
   if(!moveData || moveData.pp <= 0) return res.status(403).json({ error: "사용 불가 기술" })
 
+  // ── 사슬묶기 서버 2중 차단 (클라이언트 버튼 비활성화가 1차, 이게 2차) ──
+  if(myPkmn.chainBound && moveData.name === myPkmn.chainBound.moveName) {
+    return res.status(403).json({ error: "사슬묶기로 사용 불가" })
+  }
+
   const myTeam    = teamOf(mySlot)
   const assistKey = `assist_team${myTeam}`
   const assist    = data[assistKey] ?? null
@@ -609,29 +613,6 @@ export default async function handler(req, res) {
   pre.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
   if(!pre.blocked) {
-
-    // ── 사슬묶기 체크: 묶인 기술이면 행동 차단 ──────────────────────
-    if(myPkmn.chainBound) {
-      if(moveData.name === myPkmn.chainBound.moveName) {
-        logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} ${myPkmn.chainBound.moveName}${josa(myPkmn.chainBound.moveName,"을를")} 사용할 수 없다!`))
-        myPkmn.chainBound.turnsLeft--
-        if(myPkmn.chainBound.turnsLeft <= 0) {
-          myPkmn.chainBound = null
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"의")} 사슬묶기가 풀렸다!`))
-        }
-        const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
-        return res.status(200).json({ ok:true, ...(winTeam ? { winTeam } : {}) })
-      } else {
-        // 다른 기술 쓰면 사슬묶기 턴만 차감
-        myPkmn.chainBound.turnsLeft--
-        if(myPkmn.chainBound.turnsLeft <= 0) {
-          myPkmn.chainBound = null
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"의")} 사슬묶기가 풀렸다!`))
-        }
-      }
-    }
-    // ─────────────────────────────────────────────────────────────────
-
     const conf = checkConfusion(myPkmn)
     conf.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
@@ -647,7 +628,6 @@ export default async function handler(req, res) {
       const tSlots = targetSlots ?? []
 
       if(!moveInfo?.power) {
-        // ── 비공격 기술
         const specialResult = handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
         if(!specialResult.handled) {
@@ -682,7 +662,6 @@ export default async function handler(req, res) {
         }
 
       } else {
-        // ── 공격 기술
         resetRankStack(myPkmn)
         const isAoe = tSlots.length >= 2
         const aoeDice = isAoe ? rollD10() : null
@@ -829,7 +808,16 @@ export default async function handler(req, res) {
     ALL_FS.forEach(s => {
       const idx  = data[`${s}_active_idx`] ?? 0
       const pkmn = entries[s][idx]
-      if(pkmn) tickRanks(pkmn, logEntries)
+      if(!pkmn) return
+      tickRanks(pkmn, logEntries)
+      // ── 사슬묶기 EOT 턴 차감 ──────────────────────────────────
+      if(pkmn.chainBound) {
+        pkmn.chainBound.turnsLeft--
+        if(pkmn.chainBound.turnsLeft <= 0) {
+          pkmn.chainBound = null
+          logEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name,"의")} 사슬묶기가 풀렸다!`))
+        }
+      }
     })
   }
 
