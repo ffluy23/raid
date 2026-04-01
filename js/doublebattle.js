@@ -818,6 +818,10 @@ function applyRoomData(data) {
 
 // ── listenLogs ────────────────────────────────────
 function listenLogs(gameStartedAt) {
+  // 입장 시각 기록 — 이 시각 이전 로그는 UI 재생 없이 스킵
+  const joinedAt = Date.now()
+  let firstSnapshot = true
+
   const q = query(logsRef, orderBy("ts"))
   onSnapshot(q, snap => {
     const newEntries = []
@@ -826,8 +830,13 @@ function listenLogs(gameStartedAt) {
       const logData = d.data()
       if(gameStartedAt && logData.ts < gameStartedAt) return
       renderedLogIds.add(d.id)
+
+      // 첫 스냅샷에서 이미 존재하던 로그는 스킵 (UI는 applyRoomData로 이미 렌더링됨)
+      if(firstSnapshot) return
+
       newEntries.push(logData)
     })
+    firstSnapshot = false
     if(newEntries.length > 0) enqueueLogs(newEntries)
   })
 }
@@ -965,6 +974,11 @@ onAuthStateChanged(auth, async user => {
     const userSnap = await getDoc(doc(db, "users", myUid))
     window.__myDisplayName = userSnap.data()?.nickname ?? myUid.slice(0, 6)
     window.initDoubleChat({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt: data?.game_started_at ?? 0 })
+  }
+
+  // 중간 입장 시 현재 상태 즉시 렌더링 (로그 큐 재생 전에 UI 먼저 표시)
+  if(data?.p1_entry) {
+    applyRoomData(data)
   }
 
   listenLogs(data?.game_started_at ?? 0)
