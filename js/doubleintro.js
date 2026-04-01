@@ -218,11 +218,17 @@ async function playVsIntro(room) {
   }
 }
 
-function startBattle() {
+async function startBattle() {
   if (!overlay || overlay.classList.contains("fade-out")) return
   overlay.classList.add("fade-out")
   const battleScreen = document.getElementById("battle-screen")
   if (battleScreen) battleScreen.style.opacity = "1"
+
+  // p1만 game_started_at 기록 (채팅 필터 기준점)
+  if (mySlot === "p1") {
+    await updateDoc(roomRef, { game_started_at: Date.now() })
+  }
+
   setTimeout(() => {
     overlay.classList.add("hidden")
     initVolumeSlider()
