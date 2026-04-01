@@ -12,24 +12,10 @@ import {
 } from "../lib/gameUtils.js"
 
 // ── 타입 로그 빌더 ──────────────────────────────────────────────────
-// 클라이언트가 타입 보고 순서대로 애니메이션 처리함
-// type 목록:
-//   "normal"        - 일반 텍스트 로그
-//   "move_announce" - 기술명 선언 (텍스트)
-//   "dice"          - 주사위 애니메이션, meta: { slot, roll }
-//   "hit"           - 넉백+blink,       meta: { defender }
-//   "assist"        - ASSIST! 애니메이션
-//   "sync"          - SYNCHRONIZE! 애니메이션
-//   "hp"            - HP 바 업데이트,   meta: { slot, hp, maxHp }
-//   "after_hit"     - 효과굉장/별로/급소 등 텍스트
-//   "faint"         - 기절 로그 + 이펙트, meta: { slot }
-
 function makeLog(type, text = "", meta = null) {
   return { type, text, ...(meta ? { meta } : {}) }
 }
 
-// ── writeLogs: 배열을 Firestore logs subcollection에 타임스탬프 순으로 저장 ──
-// assistEventTs, syncEventTs: 해당 타입 로그의 ts 반환 (없으면 null)
 async function writeLogs(roomId, logEntries) {
   const logsRef = db.collection("double").doc(roomId).collection("logs")
   const base    = Date.now()
@@ -45,10 +31,6 @@ async function writeLogs(roomId, logEntries) {
   await batch.commit()
   return { assistEventTs, syncEventTs }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 이하 게임 로직 함수들 (useMove.js 내부용)
-// ─────────────────────────────────────────────────────────────────────────────
 
 function defaultRanks(pokemon) {
   if(!pokemon) return { atk:0, atkTurns:0, def:0, defTurns:0, spd:0, spdTurns:0 }
@@ -235,7 +217,7 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
     if(tPkmn.seeded) { logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"은는")} 이미 씨뿌리기 상태다!`)) }
     else {
       tPkmn.seeded     = true
-      tPkmn.seederSlot = mySlot  // 씨를 뿌린 쪽 슬롯
+      tPkmn.seederSlot = mySlot
       logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"의")} 몸에 씨를 뿌렸다!`))
     }
     return { handled:true }
@@ -276,7 +258,6 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
     logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참기 시작했다!`))
     return { handled:true }
   }
-
   if(moveInfo.chainBind) {
     if(tSlots.length === 0) return { handled:true }
     const tSlot = tSlots[0]
@@ -300,11 +281,9 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
 function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, entries, data, logEntries) {
   if(!moveInfo) return { handled:false, damage:0 }
 
-  // 헬퍼: 빗나감 로그
   const missLog = (hitType) => logEntries.push(makeLog("normal",
     hitType === "evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
 
-  // 헬퍼: 데미지 처리 후 로그 시퀀스 (hit→hp→after_hit)
   function dealDamage(dmg, multiplier, critical, slot, pkmn) {
     pkmn.hp = Math.max(0, pkmn.hp - dmg)
     logEntries.push(makeLog("hit",      "", { defender: slot }))
@@ -527,6 +506,31 @@ async function applyLeechSeedEot(entries, data, logEntries) {
   }
 }
 
+// ── 공통 early return 헬퍼 ────────────────────────────────────────────
+async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {}) {
+  const { assistEventTs, syncEventTs } = await writeLogs(roomId, logEntries)
+  const newOrder = (data.current_order ?? []).slice(1)
+  const finalUpdate = {
+    ...buildEntryUpdate(entries),
+    current_order: newOrder,
+    turn_count: (data.turn_count ?? 1) + 1,
+    ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
+    ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
+    ...update,
+  }
+  ALL_FS.forEach(s => {
+    if(data[`${s}_active_idx`] !== undefined) finalUpdate[`${s}_active_idx`] = data[`${s}_active_idx`]
+  })
+  const winTeam = checkWin(entries)
+  if(winTeam) {
+    finalUpdate.game_over = true
+    finalUpdate.winner_team = winTeam
+    finalUpdate.current_order = []
+  }
+  await roomRef.update(finalUpdate)
+  return winTeam
+}
+
 // ── 메인 핸들러 ───────────────────────────────────────────────────────
 export default async function handler(req, res) {
   Object.entries(corsHeaders()).forEach(([k,v]) => res.setHeader(k,v))
@@ -547,7 +551,7 @@ export default async function handler(req, res) {
   const entries     = deepCopyEntries(data)
   const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
   const myPkmn      = entries[mySlot][myActiveIdx]
-  myPkmn._slot      = mySlot   // HP 로그용
+  myPkmn._slot      = mySlot
   if(myPkmn.hp <= 0) return res.status(403).json({ error: "포켓몬 기절 상태" })
 
   const moveData = myPkmn.moves?.[moveIdx]
@@ -561,29 +565,30 @@ export default async function handler(req, res) {
   let assistUsedThisTurn = false
   const activatedSyncKeys = new Set()
 
-  // ── logEntries: 타입 포함 로그 배열 ──────────────────────────────
   const logEntries = []
 
-  // ── 참기 자동처리 (bideState 있으면 기술 무시하고 참기 진행) ──────
-  const moveInfo_check = moves[moveData?.name]
-  if(myPkmn.bideState && !(moveInfo_check?.bide)) {
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ── 참기 자동처리
+  // bideState가 있으면 moveIdx/기술명 무관하게 무조건 참기 진행
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  if(myPkmn.bideState) {
     myPkmn.bideState.turnsLeft--
+
     if(myPkmn.bideState.turnsLeft > 0) {
       // 아직 참는 중
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
     } else {
-      // 발사
+      // 발사 턴
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
-      const bide    = myPkmn.bideState
+      const bide = myPkmn.bideState
       myPkmn.bideState = null
+
       if(!bide || bide.damage <= 0) {
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참기 발사에 실패했다!`))
       } else {
         const bideDmg = bide.damage * 2
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참았던 에너지를 방출했다!`))
-        // 모든 상대 슬롯에 데미지 (teamOf로 직접 계산)
-        const myTeamForBide = teamOf(mySlot)
-        const enemySlots = ALL_FS.filter(s => teamOf(s) !== myTeamForBide)
+        const enemySlots = ALL_FS.filter(s => teamOf(s) !== myTeam)
         for(const eSlot of enemySlots) {
           const eIdx  = data[`${eSlot}_active_idx`] ?? 0
           const ePkmn = entries[eSlot][eIdx]
@@ -596,33 +601,23 @@ export default async function handler(req, res) {
         }
       }
     }
-    const { assistEventTs: aTs, syncEventTs: sTs } = await writeLogs(roomId, logEntries)
-    const newOrder = (data.current_order ?? []).slice(1)
-    const update = {
-      ...buildEntryUpdate(entries),
-      current_order: newOrder,
-      turn_count: (data.turn_count ?? 1) + 1,
-      ...(aTs !== null ? { assist_event: { ts: aTs } } : {}),
-      ...(sTs  !== null ? { sync_event:   { ts: sTs  } } : {}),
-    }
-    ALL_FS.forEach(s => { if(data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`] })
-    const winTeam = checkWin(entries)
-    if(winTeam) { update.game_over = true; update.winner_team = winTeam; update.current_order = [] }
-    await roomRef.update(update)
-    return res.status(200).json({ ok:true })
+
+    const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
+    return res.status(200).json({ ok:true, ...(winTeam ? { winTeam } : {}) })
   }
 
-  // ── 구르기 자동처리 (rollState.active 면 기술 무시하고 구르기 자동 진행) ──
-  const moveInfo_rollCheck = moves[moveData?.name]
-  if(myPkmn.rollState?.active && !(moveInfo_rollCheck?.rollout)) {
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ── 구르기 자동처리
+  // rollState.active가 있으면 moveIdx/기술명 무관하게 구르기 2~3번째 진행
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  if(myPkmn.rollState?.active) {
     const rollState = myPkmn.rollState
     const rollTurn  = rollState.turn + 1
     const rollPower = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
 
     logEntries.push(makeLog("move_announce", `${myPkmn.name}의 구르기! (${rollTurn}번째)`))
 
-    const myTeamForRoll = teamOf(mySlot)
-    const enemySlots = myTeamForRoll === "A" ? ["p3","p4"] : ["p1","p2"]
+    const enemySlots = myTeam === "A" ? ["p3","p4"] : ["p1","p2"]
     for(const eSlot of enemySlots) {
       const eIdx  = data[`${eSlot}_active_idx`] ?? 0
       const ePkmn = entries[eSlot][eIdx]
@@ -655,22 +650,13 @@ export default async function handler(req, res) {
       myPkmn.rollState = rollTurn >= 3 ? { active: false, turn: 0 } : { active: true, turn: rollTurn }
     }
 
-    const { assistEventTs: aTs, syncEventTs: sTs } = await writeLogs(roomId, logEntries)
-    const newOrder = (data.current_order ?? []).slice(1)
-    const update = {
-      ...buildEntryUpdate(entries),
-      current_order: newOrder,
-      turn_count: (data.turn_count ?? 1) + 1,
-      ...(aTs !== null ? { assist_event: { ts: aTs } } : {}),
-      ...(sTs  !== null ? { sync_event:   { ts: sTs  } } : {}),
-    }
-    ALL_FS.forEach(s => { if(data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`] })
-    const winTeam = checkWin(entries)
-    if(winTeam) { update.game_over = true; update.winner_team = winTeam; update.current_order = [] }
-    await roomRef.update(update)
-    return res.status(200).json({ ok:true })
+    const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
+    return res.status(200).json({ ok:true, ...(winTeam ? { winTeam } : {}) })
   }
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ── 일반 기술 처리
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   const pre = checkPreActionStatus(myPkmn)
   pre.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
@@ -685,13 +671,12 @@ export default async function handler(req, res) {
       if(!myPkmn.usedMoves.includes(moveData.name)) myPkmn.usedMoves.push(moveData.name)
 
       const moveInfo = moves[moveData.name]
-      // 1. 기술명 선언
       logEntries.push(makeLog("move_announce", `${myPkmn.name}의 ${moveData.name}!`))
 
       const tSlots = targetSlots ?? []
 
-      // ── 비공격 기술 ──────────────────────────────────────────
       if(!moveInfo?.power) {
+        // ── 비공격 기술
         const specialResult = handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
         if(!specialResult.handled) {
@@ -722,7 +707,7 @@ export default async function handler(req, res) {
         }
 
       } else {
-        // ── 공격 기술 ────────────────────────────────────────
+        // ── 공격 기술
         resetRankStack(myPkmn)
         const isAoe = tSlots.length >= 2
 
@@ -731,7 +716,6 @@ export default async function handler(req, res) {
           const tPkmn = entries[tSlot][tIdx]
           if(!tPkmn || tPkmn.hp <= 0) continue
 
-          // 방어 체크
           if(tPkmn.defending) {
             logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"은는")} 방어했다!`))
             if(moveInfo?.jumpKick) {
@@ -743,11 +727,9 @@ export default async function handler(req, res) {
             continue
           }
 
-          // 특수 공격 기술
           const specialAtk = handleSpecialAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlot, tPkmn, entries, data, logEntries)
           if(specialAtk.handled) continue
 
-          // ── 일반 공격 ──────────────────────────────────────
           const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
           if(!hit) {
             logEntries.push(makeLog("normal", hitType==="evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
@@ -762,14 +744,12 @@ export default async function handler(req, res) {
 
           let { damage, multiplier, critical, dice } = calcDamage(myPkmn, moveData.name, tPkmn)
 
-          // 2. 주사위 (공격 기술 명중 시)
           logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
 
           if(multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
           if(isRequester) { damage = Math.floor(damage * 1.15); assistUsedThisTurn = true }
 
-          // 싱크로나이즈 계산
           const tTeam        = teamOf(tSlot)
           const syncKey      = `sync_team${tTeam}`
           const sync         = data[syncKey] ?? null
@@ -780,7 +760,6 @@ export default async function handler(req, res) {
           let mainDmg = damage, spillDmg = 0
           if(tIsInSync && syncAllyPkmn && syncAllyPkmn.hp > 0) {
             activatedSyncKeys.add(syncKey)
-            // 3. SYNC 애니메이션
             logEntries.push(makeLog("sync", ""))
             if(isAoe) {
               mainDmg = Math.max(1, Math.floor(damage * 0.75))
@@ -792,7 +771,6 @@ export default async function handler(req, res) {
             }
           }
 
-          // 버티기
           if(tPkmn.enduring && mainDmg >= tPkmn.hp) {
             mainDmg = tPkmn.hp - 1
             logEntries.push(makeLog("after_hit", `${tPkmn.name}${josa(tPkmn.name,"은는")} 버텼다!`))
@@ -801,7 +779,6 @@ export default async function handler(req, res) {
 
           tPkmn.hp = Math.max(0, tPkmn.hp - mainDmg)
 
-          // 4. hit → hp → after_hit 순서
           logEntries.push(makeLog("hit", "", { defender: tSlot }))
           logEntries.push(makeLog("hp",  "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
 
@@ -810,19 +787,15 @@ export default async function handler(req, res) {
           if(critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
           if(isRequester && assistUsedThisTurn) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
 
-          // 부가효과
-          // drain은 applyMoveEffect에 0 넘겨서 내부 처리 막고 여기서 직접 처리
           applyMoveEffect({ ...moveInfo?.effect, drain: 0 }, myPkmn, tPkmn, mainDmg).forEach(m => logEntries.push(makeLog("normal", m)))
           if(moveInfo?.rank) applyRankChanges(moveInfo.rank, myPkmn, tPkmn, null, logEntries)
 
-          // drain 흡수 (한 번만)
           if(moveInfo?.effect?.drain && mainDmg > 0) {
             const heal = Math.max(1, Math.floor(mainDmg * moveInfo.effect.drain))
             myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
             logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name,"은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
           }
 
-          // 반동
           if(moveInfo?.effect?.recoil && mainDmg > 0) {
             const recoil = Math.max(1, Math.floor(mainDmg * moveInfo.effect.recoil))
             myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
@@ -832,7 +805,6 @@ export default async function handler(req, res) {
 
           if(tPkmn.hp <= 0) logEntries.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name,"은는")} 쓰러졌다!`, { slot: tSlot }))
 
-          // 싱크 스필
           if(spillDmg > 0 && syncAllyPkmn && syncAllyPkmn.hp > 0) {
             if(syncAllyPkmn.enduring && spillDmg >= syncAllyPkmn.hp) {
               spillDmg = syncAllyPkmn.hp - 1
@@ -846,11 +818,9 @@ export default async function handler(req, res) {
             if(syncAllyPkmn.hp <= 0) logEntries.push(makeLog("faint", `${syncAllyPkmn.name}${josa(syncAllyPkmn.name,"은는")} 쓰러졌다!`, { slot: syncAllySlot }))
           }
 
-          // 어시스트 추가 공격
           if(isRequester && assistUsedThisTurn && supporterSlot) {
             const supPkmn = entries[supporterSlot]?.[data[`${supporterSlot}_active_idx`] ?? 0]
             if(supPkmn && supPkmn.hp > 0 && tPkmn.hp > 0) {
-              // 5. ASSIST 애니메이션
               logEntries.push(makeLog("assist", ""))
               const bonusDmg = Math.max(1, Math.floor(damage * 0.3))
               tPkmn.hp = Math.max(0, tPkmn.hp - bonusDmg)
@@ -861,7 +831,6 @@ export default async function handler(req, res) {
             }
           }
 
-          // 받은 데미지 기록
           tPkmn.lastReceivedDamage = mainDmg
           if(tPkmn.bideState) tPkmn.bideState.damage = (tPkmn.bideState.damage ?? 0) + mainDmg
         }
@@ -870,7 +839,6 @@ export default async function handler(req, res) {
     tickRanks(myPkmn, logEntries)
     clearRankStack(myPkmn)
 
-    // 방어 턴 틱 (매 턴 감소, 0이 되면 해제)
     if((myPkmn.defendTurns ?? 0) > 0) {
       myPkmn.defendTurns--
       if(myPkmn.defendTurns <= 0) {
@@ -905,7 +873,6 @@ export default async function handler(req, res) {
     ...syncUpdate,
     current_order:     newOrder,
     turn_count:        newTurnCount,
-    // hit_event / attack_dice_event / dice_event 제거 — 로그 타입으로 대체
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
   }
