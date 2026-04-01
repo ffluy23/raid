@@ -30,7 +30,7 @@ window.initDoubleChat=function({db, ROOM_ID, myUid, mySlot, isSpectator}){
 
   // 채널 라벨
   const labelEl=document.getElementById("chat-channel-label")
-  const labelMap={teamA:"🔵 팀A 채팅",teamB:"🔴 팀B 채팅",spectator:"👁 관전자 채팅"}
+  const labelMap={teamA:"🔵 팀A 채팅",teamB:"🔴 팀B 채팅",spectator:"관전자 채팅"}
   if(labelEl) labelEl.innerText=labelMap[channel]??"채팅"
 
   const container=document.getElementById("chat-messages")

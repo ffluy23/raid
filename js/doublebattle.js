@@ -9,6 +9,7 @@ import { josa } from "./effecthandler.js"
 
 window.__moves = moves
 
+
 const API = "https://pokedouble-eosin.vercel.app/api"
 
 async function callApi(endpoint, data) {
@@ -185,7 +186,6 @@ function listenLogs(gameStartedAt) {
 }
 
 // ── 주사위 애니메이션 ────────────────────────────
-// 라운드 시작 주사위 (여러 슬롯)
 function animateDice(rolls, slots, onDone) {
   const wrap = $("dice-wrap")
   if(!wrap) { onDone?.(); return }
@@ -216,7 +216,6 @@ function animateDice(rolls, slots, onDone) {
   }, 60)
 }
 
-// 공격 주사위 (단일 슬롯) — 서버가 보낸 값으로 애니메이션
 function animateAttackDice(slot, finalRoll) {
   return new Promise(resolve => {
     const wrap   = $("dice-wrap")
@@ -309,23 +308,42 @@ function updateMoveButtons(data) {
 // ── 기술 클릭 → 타겟 선택 or 즉시 사용 ─────────
 function onMoveClick(idx, moveInfo, data) {
   if(actionDone) return
-  const r = moveInfo?.rank
-  const targetsEnemy = moveInfo?.power
-    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
 
-  if(targetsEnemy) {
-    enterTargetMode(idx, data)
+  const r = moveInfo?.rank
+
+  // 적군 타겟이 필요한 기술 판별
+  const targetsEnemy =
+    moveInfo?.power                                                                                    // 공격 기술
+    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))   // 상대 랭크다운
+    || moveInfo?.roar                                                                                  // 울부짖기
+    || moveInfo?.leechSeed                                                                             // 씨뿌리기
+    || moveInfo?.chainBind                                                                             // 사슬묶기
+    || moveInfo?.dragonTail  
+    || moveInfo?.healPulse                                                                          // 드래곤테일
+    || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)                                          // 뽐내기 등 혼란/풀죽음
+
+  // 아군 타겟이 필요한 기술 판별 (자기 자신 제외)
+  const targetsAlly = moveInfo?.healPulse  // 치유파동
+
+  if(targetsEnemy || targetsAlly) {
+    enterTargetMode(idx, data, { targetsEnemy: !!targetsEnemy, targetsAlly: !!targetsAlly })
   } else {
     doUseMove(idx, [], data)
   }
 }
 
-function enterTargetMode(idx, data) {
+// ── 타겟 선택 모드 ───────────────────────────────
+function enterTargetMode(idx, data, { targetsEnemy = true, targetsAlly = false } = {}) {
   pendingMoveIdx = idx
   const hint = $("target-hint")
   if(hint) hint.style.display = "block"
 
-  enemySlotsOf(mySlot).forEach(eSlot => {
+  // 클릭 가능한 슬롯 수집
+  const clickableSlots = []
+  if(targetsEnemy) enemySlotsOf(mySlot).forEach(s => clickableSlots.push(s))
+  if(targetsAlly)  clickableSlots.push(allyOf(mySlot))  // 아군 (자신 제외)
+
+  clickableSlots.forEach(eSlot => {
     const eActiveIdx = data[`${eSlot}_active_idx`] ?? 0
     const ePkmn      = data[`${eSlot}_entry`]?.[eActiveIdx]
     if(!ePkmn || ePkmn.hp <= 0) return
@@ -346,7 +364,8 @@ function exitTargetMode() {
   pendingMoveIdx = -1
   const hint = $("target-hint")
   if(hint) hint.style.display = "none"
-  ;["enemy1","enemy2"].forEach(prefix => {
+  // 적군 + 아군 prefix 전부 초기화
+  ;["enemy1","enemy2","ally"].forEach(prefix => {
     const area = $(`${prefix}-pokemon-area`)
     if(!area) return
     area.classList.remove("target-selectable")
@@ -359,13 +378,10 @@ async function doUseMove(moveIdx, targetSlots, data) {
   actionDone = true
   updateMoveButtons(data)
 
-  // 공격 기술 여부 확인
   const mv       = data[`${mySlot}_entry`]?.[data[`${mySlot}_active_idx`] ?? 0]?.moves?.[moveIdx]
   const moveInfo = mv ? (window.__moves?.[mv.name] ?? {}) : {}
   const isAttack = !!moveInfo.power
 
-  // 클라이언트에서 주사위를 굴려 서버로 전송 → 서버가 검증 후 사용
-  // 실제 결과는 서버의 attack_dice_event를 onSnapshot에서 받아 애니메이션
   const diceRoll = isAttack && targetSlots.length > 0 ? rollD10() : null
 
   try {
@@ -537,7 +553,6 @@ function showSyncAnimation() {
 // ── 어시스트 UI ──────────────────────────────────
 function updateAssistUI(data) {
   const myTeam   = teamOf(mySlot)
-  // 서버 Functions는 assist_request 단일 필드 사용
   const assist   = data[`assist_team${myTeam}`] ?? null
   const used     = data[`assist_used_${myTeam}`] ?? false
   const req      = data.assist_request ?? null
@@ -571,7 +586,6 @@ function updateAssistUI(data) {
     }
   }
 
-  // 수락/거절 팝업 (내가 to인 요청)
   const popup = $("assist-popup")
   if(popup) {
     if(req && req.to === mySlot && !isSpectator) {
@@ -584,7 +598,7 @@ function updateAssistUI(data) {
   }
 }
 
-// ── 어시스트 액션 (모두 Functions 호출) ─────────
+// ── 어시스트 액션 ────────────────────────────────
 async function doRequestAssist() {
   if(!myTurn) { alert("자신의 턴에만 지원 요청할 수 있어!"); return }
   try {
@@ -615,7 +629,6 @@ function updateSyncUI(data) {
   const myTeam   = teamOf(mySlot)
   const sync     = data[`sync_team${myTeam}`] ?? null
   const used     = data[`sync_used_${myTeam}`] ?? false
-  // 서버에서 sync_request 단일 필드로 관리
   const req      = data.sync_request ?? null
   const teamDead = isTeamAllDead(data)
 
@@ -656,20 +669,16 @@ function updateSyncUI(data) {
     }
   }
 
-  // 팀별 비공개 싱크 로그 처리
   const syncLogKey = `sync_log_${myTeam}`
   const syncLog    = data[syncLogKey]
   if(syncLog && !renderedSyncLogs.has(syncLog)) {
     renderedSyncLogs.add(syncLog)
     typingQueue.push({ text: syncLog })
     processQueue()
-    // 읽은 후 서버에서 지움 (rejectSync 재사용 or 별도 Function으로 처리)
-    // 간단하게: clearSyncLog Function 대신 acceptSync가 이미 처리하므로
-    // 여기선 렌더링만 하고 서버 지우기는 acceptSync 내부에서 처리
   }
 }
 
-// ── 싱크 액션 (모두 Functions 호출) ─────────────
+// ── 싱크 액션 ────────────────────────────────────
 async function doRequestSync() {
   if(!myTurn) { alert("자신의 턴에만 동기화 요청할 수 있어!"); return }
   try {
@@ -695,7 +704,7 @@ async function doRejectSync() {
   }
 }
 
-// ── 방 나가기 (Functions 호출) ───────────────────
+// ── 방 나가기 ────────────────────────────────────
 async function leaveGame() {
   try {
     await _leaveGame({ roomId: ROOM_ID, myUid })
@@ -725,7 +734,6 @@ function listenRoom() {
     const data = snap.data()
     if(!data) return
 
-    // 관전자 표시
     const spectEl = $("spectator-list")
     if(spectEl) {
       const names = data.spectator_names ?? []
@@ -737,10 +745,8 @@ function listenRoom() {
       return
     }
 
-    // 각 슬롯 UI 갱신
     ;["p1","p2","p3","p4"].forEach(s => updateSlotUI(s, data))
 
-    // ── 어시스트 애니메이션 ──
     if(data.assist_event && data.assist_event.ts > lastAssistEventTs) {
       lastAssistEventTs = data.assist_event.ts
       if(!isHandlingSnapshot) {
@@ -750,7 +756,6 @@ function listenRoom() {
       }
     }
 
-    // ── 싱크로나이즈 애니메이션 ──
     if(data.sync_event && data.sync_event.ts > lastSyncEventTs) {
       lastSyncEventTs = data.sync_event.ts
       if(!isHandlingSnapshot) {
@@ -760,27 +765,22 @@ function listenRoom() {
       }
     }
 
-    // ── 히트 이벤트 ──
     if(data.hit_event && data.hit_event.ts > lastHitEventTs) {
       lastHitEventTs = data.hit_event.ts
       const prefix = slotToPrefix(data.hit_event.defender)
       if(prefix) triggerBlink(prefix)
     }
 
-    // ── 공격 주사위 이벤트 (서버가 attack_dice_event 저장) ──
-    // 모든 클라이언트가 동일하게 onSnapshot으로 받아 애니메이션 실행
     if(data.attack_dice_event && data.attack_dice_event.ts > lastAttackDiceTs) {
       lastAttackDiceTs = data.attack_dice_event.ts
       await animateAttackDice(data.attack_dice_event.slot, data.attack_dice_event.roll)
     }
 
-    // ── 라운드 시작 주사위 ──
     if(data.dice_event && data.dice_event.ts > lastDiceEventTs) {
       lastDiceEventTs = data.dice_event.ts
       animateDice(data.dice_event.rolls, data.dice_event.slots)
     }
 
-    // 게임 종료
     if(data.game_over) { showGameOver(data); return }
 
     updateOrderDisplay(data)
@@ -789,14 +789,13 @@ function listenRoom() {
       const order   = data.current_order ?? []
       const pending = data.pending_switches ?? []
 
-      const wasMyTurn    = myTurn
-      const isMyTurnNow  = order[0] === mySlot
+      const wasMyTurn   = myTurn
+      const isMyTurnNow = order[0] === mySlot
       myTurn = isMyTurnNow
 
       if(!wasMyTurn && isMyTurnNow) actionDone = false
       if(pending.includes(mySlot))  actionDone = false
 
-      // 엔트리 전멸 시 자동 스킵
       if(myTurn && !actionDone) {
         const myEntry = data[`${mySlot}_entry`] ?? []
         const allDead = myEntry.every(p => p.hp <= 0)
@@ -807,7 +806,6 @@ function listenRoom() {
         }
       }
 
-      // 라운드 시작 조건
       if(order.length === 0 && pending.length === 0 && data.game_started && !data.game_over) {
         await tryStartRound()
       }
