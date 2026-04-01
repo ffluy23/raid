@@ -32,29 +32,28 @@ async function writeLogs(roomId, logEntries) {
   return { assistEventTs, syncEventTs }
 }
 
-function defaultRanks(pokemon) {
-  if(!pokemon) return { atk:0, atkTurns:0, def:0, defTurns:0, spd:0, spdTurns:0 }
-  return {
-    atk: pokemon.attack  ?? 3, atkTurns: 0,
-    def: pokemon.defense ?? 3, defTurns: 0,
-    spd: pokemon.speed   ?? 3, spdTurns: 0,
-  }
+// ── ranks 구조: 보정치(±정수)만 저장, 기본값 0
+// atk: 자속보정 이후 ±정수로 더함, 최대 ±4, 최종값 음수 불가
+// def: 최종 데미지에서 defRank*3 추가로 빼거나 더함, 최대 ±3
+// spd: 회피율에 ±%p로 더함, 최대 ±5
+function defaultRanks() {
+  return { atk:0, atkTurns:0, def:0, defTurns:0, spd:0, spdTurns:0 }
 }
 
-function getActiveStat(pokemon, key) {
-  const r   = pokemon.ranks ?? {}
-  const raw = pokemon[key === "atk" ? "attack" : key === "def" ? "defense" : "speed"] ?? 3
-  return (r[`${key}Turns`] ?? 0) > 0 ? (r[key] ?? raw) : raw
+// 현재 활성 랭크 보정치 반환 (턴 만료 시 0)
+function getActiveRankVal(pokemon, key) {
+  const r = pokemon.ranks ?? {}
+  return (r[`${key}Turns`] ?? 0) > 0 ? (r[key] ?? 0) : 0
+}
+
+// 기본 스탯 반환 (랭크 보정 없이)
+function getBaseStat(pokemon, key) {
+  return pokemon[key === "atk" ? "attack" : key === "def" ? "defense" : "speed"] ?? 3
 }
 
 function resetRankStack(pokemon) {
   pokemon.lastRankMove = null
   pokemon.rankStack    = 0
-  if(pokemon.ranks) {
-    pokemon.ranks.atk = pokemon.attack  ?? 3; pokemon.ranks.atkTurns = 0
-    pokemon.ranks.def = pokemon.defense ?? 3; pokemon.ranks.defTurns = 0
-    pokemon.ranks.spd = pokemon.speed   ?? 3; pokemon.ranks.spdTurns = 0
-  }
 }
 
 function clearRankStack(pokemon) {
@@ -65,9 +64,10 @@ function clearRankStack(pokemon) {
 function tickRanks(pokemon, logEntries) {
   if(!pokemon.ranks) return
   const r = pokemon.ranks
-  if(r.atkTurns > 0) { r.atkTurns--; if(!r.atkTurns) { r.atk = pokemon.attack  ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 공격${josa("공격","이가")} 원래대로 돌아왔다!`)) } }
-  if(r.defTurns > 0) { r.defTurns--; if(!r.defTurns) { r.def = pokemon.defense ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 방어${josa("방어","이가")} 원래대로 돌아왔다!`)) } }
-  if(r.spdTurns > 0) { r.spdTurns--; if(!r.spdTurns) { r.spd = pokemon.speed   ?? 3; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드${josa("스피드","이가")} 원래대로 돌아왔다!`)) } }
+  // 만료 시 보정치 0으로 리셋
+  if(r.atkTurns > 0) { r.atkTurns--; if(!r.atkTurns) { r.atk = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 공격 랭크가 원래대로 돌아왔다!`)) } }
+  if(r.defTurns > 0) { r.defTurns--; if(!r.defTurns) { r.def = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 방어 랭크가 원래대로 돌아왔다!`)) } }
+  if(r.spdTurns > 0) { r.spdTurns--; if(!r.spdTurns) { r.spd = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드 랭크가 원래대로 돌아왔다!`)) } }
   if((pokemon.roostTurns ?? 0) > 0) {
     pokemon.roostTurns--
     if(pokemon.roostTurns <= 0) {
@@ -80,62 +80,60 @@ function tickRanks(pokemon, logEntries) {
   }
 }
 
+// ── 랭크 적용
+// ranks는 보정치(±정수)만 저장
+// atk: 최대 ±4 / def: 최대 ±3 / spd: 최대 ±5
+// 같은 기술 연속 사용 시 스택 (2회까지)
 function applyRankChanges(r, self, target, moveName, logEntries) {
   if(!r) return
   const roll = r.chance !== undefined ? Math.random() < r.chance : true
   if(!roll) return
 
-  const getStat = (p, key) => p[key === "atk" ? "attack" : key === "def" ? "defense" : "speed"] ?? 3
-  const getR    = (p, key) => {
-    const rr = p.ranks ?? {}
-    return (rr[`${key}Turns`] ?? 0) > 0 ? (rr[key] ?? getStat(p, key)) : getStat(p, key)
-  }
+  // 현재 보정치 읽기
+  const selfR   = { ...(self.ranks   ?? defaultRanks()) }
+  const targetR = { ...(target.ranks ?? defaultRanks()) }
 
-  const selfR   = {
-    atk: getR(self, "atk"), atkTurns: (self.ranks ?? {}).atkTurns ?? 0,
-    def: getR(self, "def"), defTurns: (self.ranks ?? {}).defTurns ?? 0,
-    spd: getR(self, "spd"), spdTurns: (self.ranks ?? {}).spdTurns ?? 0,
-  }
-  const targetR = {
-    atk: getR(target, "atk"), atkTurns: (target.ranks ?? {}).atkTurns ?? 0,
-    def: getR(target, "def"), defTurns: (target.ranks ?? {}).defTurns ?? 0,
-    spd: getR(target, "spd"), spdTurns: (target.ranks ?? {}).spdTurns ?? 0,
-  }
-
+  // 같은 기술 연속 사용 스택 처리 (self 랭크업 기술에만 적용)
   if(moveName) {
     const isSame = self.lastRankMove === moveName
     const stack  = self.rankStack ?? 0
     if(!isSame) { self.lastRankMove = moveName; self.rankStack = 1 }
-    else if(stack >= 2) {
-      selfR.atk = getStat(self, "atk"); selfR.atkTurns = 0
-      selfR.def = getStat(self, "def"); selfR.defTurns = 0
-      selfR.spd = getStat(self, "spd"); selfR.spdTurns = 0
-      self.rankStack = 1
-    } else { self.rankStack = stack + 1 }
+    else        { self.rankStack = Math.min(2, stack + 1) }
   }
 
-  const MIN = 1, MAX_MULT = 3
-  function applyOne(obj, key, delta, baseStat, name) {
-    const label = key === "atk" ? "공격" : key === "def" ? "방어" : "스피드"
-    const max   = baseStat * MAX_MULT
+  const ATK_MAX = 4, DEF_MAX = 3, SPD_MAX = 5
+
+  function applyOne(obj, key, delta, name, isTarget = false) {
+    const label  = key === "atk" ? "공격" : key === "def" ? "방어" : "스피드"
+    const maxVal = key === "atk" ? ATK_MAX : key === "def" ? DEF_MAX : SPD_MAX
+    const cur    = obj[key] ?? 0
     if(delta > 0) {
-      const p = obj[key]; obj[key] = Math.min(max, obj[key] + delta); obj[`${key}Turns`] = r.turns ?? 2
-      logEntries.push(makeLog("normal", `${name}의 ${label}${josa(label,"이가")} ${obj[key] - p} 상승했다!`))
-    } else if(delta < 0) {
-      if(obj[key] <= MIN) logEntries.push(makeLog("normal", `${name}의 ${label}${josa(label,"은는")} 더 이상 내려가지 않는다!`))
-      else {
-        const p = obj[key]; obj[key] = Math.max(MIN, obj[key] + delta); obj[`${key}Turns`] = r.turns ?? 2
-        logEntries.push(makeLog("normal", `${name}의 ${label}${josa(label,"이가")} ${p - obj[key]} 하락했다!`))
+      if(cur >= maxVal) {
+        logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 이미 최대다!`))
+        return
       }
+      const next = Math.min(maxVal, cur + delta)
+      obj[key] = next; obj[`${key}Turns`] = r.turns ?? 2
+      logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${next - cur} 올라갔다! (${next > 0 ? "+" : ""}${next})`))
+    } else if(delta < 0) {
+      // 최종값은 음수 불가 → 0이면 내려갈 수 없음 (단, 다운은 상대에게 적용하므로 별도 체크 불필요)
+      const minVal = isTarget ? -maxVal : 0
+      if(cur <= minVal) {
+        logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 더 이상 내려가지 않는다!`))
+        return
+      }
+      const next = Math.max(minVal, cur + delta)
+      obj[key] = next; obj[`${key}Turns`] = r.turns ?? 2
+      logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${cur - next} 내려갔다! (${next > 0 ? "+" : ""}${next})`))
     }
   }
 
-  if(r.atk       !== undefined) applyOne(selfR,   "atk", r.atk,       getStat(self,   "atk"), self.name)
-  if(r.def       !== undefined) applyOne(selfR,   "def", r.def,       getStat(self,   "def"), self.name)
-  if(r.spd       !== undefined) applyOne(selfR,   "spd", r.spd,       getStat(self,   "spd"), self.name)
-  if(r.targetAtk !== undefined) applyOne(targetR, "atk", r.targetAtk, getStat(target, "atk"), target.name)
-  if(r.targetDef !== undefined) applyOne(targetR, "def", r.targetDef, getStat(target, "def"), target.name)
-  if(r.targetSpd !== undefined) applyOne(targetR, "spd", r.targetSpd, getStat(target, "spd"), target.name)
+  if(r.atk       !== undefined) applyOne(selfR,   "atk", r.atk,       self.name,   false)
+  if(r.def       !== undefined) applyOne(selfR,   "def", r.def,       self.name,   false)
+  if(r.spd       !== undefined) applyOne(selfR,   "spd", r.spd,       self.name,   false)
+  if(r.targetAtk !== undefined) applyOne(targetR, "atk", r.targetAtk, target.name, true)
+  if(r.targetDef !== undefined) applyOne(targetR, "def", r.targetDef, target.name, true)
+  if(r.targetSpd !== undefined) applyOne(targetR, "spd", r.targetSpd, target.name, true)
 
   self.ranks   = selfR
   target.ranks = targetR
@@ -144,9 +142,14 @@ function applyRankChanges(r, self, target, moveName, logEntries) {
 function calcHit(atk, moveInfo, def) {
   if(Math.random()*100 >= (moveInfo.accuracy ?? 100)) return { hit:false, hitType:"missed" }
   if(moveInfo.alwaysHit || moveInfo.skipEvasion)       return { hit:true,  hitType:"hit" }
-  const as = Math.max(1, getActiveStat(atk, "spd") - getStatusSpdPenalty(atk))
-  const ds = Math.max(1, getActiveStat(def, "spd") - getStatusSpdPenalty(def))
-  const ev = Math.min(99, Math.max(0, 5*(ds-as)))
+  const as = Math.max(1, getBaseStat(atk, "spd") - getStatusSpdPenalty(atk))
+  const ds = Math.max(1, getBaseStat(def, "spd") - getStatusSpdPenalty(def))
+  // 회피율 = 5 × (상대 spd - 내 spd)% ± spd 랭크 보정%p
+  const atkSpdRank = getActiveRankVal(atk, "spd")
+  const defSpdRank = getActiveRankVal(def, "spd")
+  const baseEv  = Math.max(0, 5 * (ds - as))
+  const rankAdj = defSpdRank - atkSpdRank  // 상대 회피 + 내 명중 반영
+  const ev = Math.min(99, Math.max(0, baseEv + rankAdj))
   return Math.random()*100 < ev ? { hit:false, hitType:"evaded" } : { hit:true, hitType:"hit" }
 }
 
@@ -162,13 +165,29 @@ function calcDamage(atk, moveName, def, powerOverride=null, atkStatOverride=null
   const atkTypes = Array.isArray(atk.type) ? atk.type : [atk.type]
   const stab     = atkTypes.includes(move.type)
   const power    = powerOverride ?? (move.power ?? 40)
-  const atkStat  = atkStatOverride ?? getActiveStat(atk, "atk")
-  const defStat  = getActiveStat(def, "def")
-  const base     = power + atkStat*4 + dice
-  const raw      = Math.floor(base * mult * (stab ? 1.3 : 1))
-  const afterDef = Math.max(0, raw - defStat*5)
-  const critical = Math.random()*100 < Math.min(100, atkStat*2)
-  return { damage: critical ? Math.floor(afterDef*1.5) : afterDef, multiplier:mult, stab, critical, dice }
+  const atkStat  = atkStatOverride ?? getBaseStat(atk, "atk")
+  const defStat  = getBaseStat(def, "def")
+
+  // 공식: (위력 + 공격력×4 + 주사위) × 타입상성 × 자속보정
+  const base = power + atkStat*4 + dice
+  const raw  = Math.floor(base * mult * (stab ? 1.3 : 1))
+
+  // 공격 랭크: 자속보정 이후 ±정수, 최대 ±4, 최종값 음수 불가
+  const atkRank   = getActiveRankVal(atk, "atk")
+  const afterAtk  = Math.max(0, raw + atkRank)
+
+  // 방어 스탯 감산
+  const afterDef  = Math.max(0, afterAtk - defStat*5)
+
+  // 방어 랭크: 최종 데미지에서 defRank×3 추가 감산, 최대 ±3
+  const defRank   = getActiveRankVal(def, "def")
+  const afterDefR = Math.max(0, afterDef - defRank*3)
+
+  // 급소: 공격 랭크 영향 없음, 단 급소 피해량엔 atkRank 반영됨 (이미 afterAtk에 포함)
+  const critical  = Math.random()*100 < Math.min(100, atkStat*2)
+  const finalDmg  = critical ? Math.floor(afterDefR*1.5) : afterDefR
+
+  return { damage: finalDmg, multiplier:mult, stab, critical, dice }
 }
 
 // ── 특수 비공격 기술 ─────────────────────────────────────────────────
@@ -437,7 +456,7 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
   if(moveInfo.clearSmog) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if(!hit) { missLog(hitType); return { handled:true, damage:0 } }
-    tPkmn.ranks = defaultRanks(tPkmn)
+    tPkmn.ranks = defaultRanks()
     logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name,"의")} 능력 변화가 원래대로 돌아왔다!`))
     const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
     if(multiplier > 0) dealDamage(damage, multiplier, critical, tSlot, tPkmn)
