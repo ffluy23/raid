@@ -92,8 +92,11 @@ function cannotRequestSupport(data) {
   return myFainted || allyPending
 }
 
+// 관전자(mySlot=null)는 p1=my, p2=ally, p3=enemy1, p4=enemy2 고정 매핑
+const SPECTATOR_PREFIX = { p1: "my", p2: "ally", p3: "enemy1", p4: "enemy2" }
+
 function slotToPrefix(slot) {
-  if(!mySlot) return null
+  if(!mySlot) return SPECTATOR_PREFIX[slot] ?? null
   if(slot === mySlot)          return "my"
   if(slot === allyOf(mySlot))  return "ally"
   const enemies = enemySlotsOf(mySlot)
