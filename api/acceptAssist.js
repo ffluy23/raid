@@ -24,7 +24,6 @@ export default async function handler(req, res) {
 
   await roomRef.update({
     [`assist_team${myTeam}`]:  { requester: assistReq.from, requesterName: assistReq.fromName, supporter: mySlot, supporterName: myName },
-    [`assist_used_${myTeam}`]: true,
     assist_request: null
   })
   await writeLogs(db, roomId, [
