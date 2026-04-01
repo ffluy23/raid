@@ -581,8 +581,9 @@ export default async function handler(req, res) {
       } else {
         const bideDmg = bide.damage * 2
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참았던 에너지를 방출했다!`))
-        // 모든 상대 슬롯에 데미지
-        const enemySlots = enemySlotsOf(mySlot)
+        // 모든 상대 슬롯에 데미지 (teamOf로 직접 계산)
+        const myTeamForBide = teamOf(mySlot)
+        const enemySlots = ALL_FS.filter(s => teamOf(s) !== myTeamForBide)
         for(const eSlot of enemySlots) {
           const eIdx  = data[`${eSlot}_active_idx`] ?? 0
           const ePkmn = entries[eSlot][eIdx]
