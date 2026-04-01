@@ -324,9 +324,21 @@ function triggerBlink(prefix) {
   return new Promise(resolve => {
     const area = $(`${prefix}-pokemon-area`)
     if(!area) { resolve(); return }
-    area.classList.remove("blink-damage"); void area.offsetWidth
-    area.classList.add("blink-damage")
-    area.addEventListener("animationend", () => { area.classList.remove("blink-damage"); resolve() }, { once: true })
+    // 포트레이트 wrap과 hp-card만 깜빡이도록 타겟 지정
+    const targets = [
+      area.querySelector(".portrait-wrap"),
+      area.querySelector(".hp-card")
+    ].filter(Boolean)
+    if(targets.length === 0) { resolve(); return }
+    let done = 0
+    targets.forEach(el => {
+      el.classList.remove("blink-damage"); void el.offsetWidth
+      el.classList.add("blink-damage")
+      el.addEventListener("animationend", () => {
+        el.classList.remove("blink-damage")
+        if(++done >= targets.length) resolve()
+      }, { once: true })
+    })
   })
 }
 
