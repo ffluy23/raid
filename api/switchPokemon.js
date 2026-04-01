@@ -9,29 +9,15 @@ function defaultRanks() {
   return { atk: 0, atkTurns: 0, def: 0, defTurns: 0, spd: 0, spdTurns: 0 }
 }
 
-/** 교체 나가는 포켓몬의 각종 상태 초기화 */
 function resetOnSwitch(pkmn) {
-  // 랭크 초기화
   pkmn.lastRankMove = null
   pkmn.rankStack    = 0
-  if (pkmn.ranks) {
-    pkmn.ranks = defaultRanks()
-  }
-  // 구르기 초기화
-  pkmn.rollState = { active: false, turn: 0 }
-  // 참기 취소
-  pkmn.bideState = null
-  // 씨뿌리기 해제 (교체 시 씨 상태 사라짐)
-  pkmn.seeded = false
-  // 방어 해제
-  pkmn.defending  = false
+  if (pkmn.ranks) pkmn.ranks = defaultRanks()
+  pkmn.rollState   = { active: false, turn: 0 }
+  pkmn.bideState   = null
+  pkmn.seeded      = false
+  pkmn.defending   = false
   pkmn.defendTurns = 0
-  // 혼란/풀죽음 유지 (교체해도 사라지지 않는 게 포켓몬 원작 룰이지만,
-  //   필요시 아래 주석 해제하면 초기화됨)
-  // pkmn.confusion = 0
-  // pkmn.flinch    = false
-  // 신비의부적·희망사항·날개쉬기 volatile은 유지
-  // (원하면 여기서 초기화 가능)
 }
 
 export default async function handler(req, res) {
@@ -48,26 +34,28 @@ export default async function handler(req, res) {
   const data    = snap.data()
   if (!data) return res.status(404).json({ error: "방 없음" })
 
-  if (!data.current_order || data.current_order[0] !== mySlot)
-    return res.status(403).json({ error: "내 턴이 아님" })
-
-  const entries   = deepCopyEntries(data)
-  const myName    = data[`${roomName(mySlot)}_name`] ?? mySlot
+  const order     = data.current_order ?? []
   const activeIdx = data[`${mySlot}_active_idx`] ?? 0
+  const entries   = deepCopyEntries(data)
   const prevPkmn  = entries[mySlot][activeIdx]
   const nextPkmn  = entries[mySlot][newIdx]
+
+  // 기절 상태인지 체크
+  const isFainted = !prevPkmn || prevPkmn.hp <= 0
+
+  // 기절 교체: 턴 체크 없이 허용
+  // 일반 교체: 내 턴이어야 함
+  if (!isFainted && order[0] !== mySlot)
+    return res.status(403).json({ error: "내 턴이 아님" })
 
   if (!nextPkmn || nextPkmn.hp <= 0)
     return res.status(403).json({ error: "교체 대상 포켓몬이 없거나 기절 상태" })
 
-  const prev = prevPkmn.name
-  const next = nextPkmn.name
+  const myName = data[`${roomName(mySlot)}_name`] ?? mySlot
+  const prev   = prevPkmn?.name ?? "?"
+  const next   = nextPkmn.name
 
-  // ── 교체 나가는 포켓몬 상태 초기화 ──────────────
   resetOnSwitch(prevPkmn)
-
-  // 교체로 새로 나오는 포켓몬의 씨뿌리기는 해제
-  // (씨 심은 쪽이 다르므로 유지해도 되지만 싱글 룰 따라 초기화)
   nextPkmn.seeded = false
 
   const logs = [
@@ -75,7 +63,18 @@ export default async function handler(req, res) {
     `${myName}${josa(myName, "은는")} ${next}${josa(next, "을를")} 내보냈다!`
   ]
 
-  const newOrder     = (data.current_order ?? []).slice(1)
+  // 기절 교체는 턴을 소모하지 않음
+  if (isFainted) {
+    await writeLogs(db, roomId, logs)
+    await roomRef.update({
+      ...buildEntryUpdate(entries),
+      [`${mySlot}_active_idx`]: newIdx,
+    })
+    return res.status(200).json({ ok: true })
+  }
+
+  // 일반 교체는 기존대로 턴 소모
+  const newOrder     = order.slice(1)
   const newTurnCount = (data.turn_count ?? 1) + 1
   const isEot        = newOrder.length === 0
 
