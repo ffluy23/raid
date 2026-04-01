@@ -118,7 +118,8 @@ function applyRankStack(pkmn, moveName, r, target, logs) {
  *   handled: true → 이 함수에서 처리 완료 (일반 랭크/공격 루틴 스킵)
  *   blocked: true → 기술 발동 자체가 막힘 (PP는 이미 소모됨)
  */
-function handleSpecialNonAttack(moveInfo, moveName, myPkmn, tSlots, entries, data, logs) {
+function handleSpecialNonAttack(moveInfo, moveName, myPkmn, tSlots, entries, data, logs)
+  if(!moveInfo) return { handled: false, blocked: false } {
   // ── 방어 ──────────────────────────────────────────────────────
   if (moveInfo.defend) {
     myPkmn.defending   = true
