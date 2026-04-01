@@ -4,7 +4,7 @@ import { getTypeMultiplier } from "../lib/typeChart.js"
 import {
   josa, applyMoveEffect, checkPreActionStatus,
   checkConfusion, applyEndOfTurnDamage, getStatusSpdPenalty,
-  applyStatus, applyVolatile, tickVolatiles, applyLeechSeed
+  applyStatus, applyVolatile, tickVolatiles
 } from "../lib/effecthandler.js"
 import {
   ALL_FS, deepCopyEntries, buildEntryUpdate, checkWin, collectFaintedSlots,
