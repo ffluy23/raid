@@ -179,7 +179,7 @@ function calcDamage(atk, moveName, def, powerOverride=null, atkStatOverride=null
 }
 
 // ── 특수 비공격 기술 ─────────────────────────────────────────────────
-function handleSpecialNonAttack(moveInfo, myPkmn, tSlots, entries, data, logEntries) {
+function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data, logEntries) {
   if(!moveInfo) return { handled:false }
 
   if(moveInfo.defend) {
@@ -692,7 +692,7 @@ export default async function handler(req, res) {
 
       // ── 비공격 기술 ──────────────────────────────────────────
       if(!moveInfo?.power) {
-        const specialResult = handleSpecialNonAttack(moveInfo, myPkmn, tSlots, entries, data, logEntries)
+        const specialResult = handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
         if(!specialResult.handled) {
           const r            = moveInfo?.rank
