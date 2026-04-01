@@ -878,7 +878,6 @@ export default async function handler(req, res) {
         }
       }
     }
-    tickRanks(myPkmn, logEntries)
     clearRankStack(myPkmn)
 
     if((myPkmn.defendTurns ?? 0) > 0) {
@@ -903,11 +902,21 @@ export default async function handler(req, res) {
     syncUpdate[`sync_used_${team}`] = true
   })
 
-  const { assistEventTs, syncEventTs } = await writeLogs(roomId, logEntries)
-
   const newOrder     = (data.current_order ?? []).slice(1)
   const newTurnCount = (data.turn_count ?? 1) + 1
   const isEot        = newOrder.length === 0
+
+  // ── tickRanks는 라운드 마지막 턴(EOT)에만 호출
+  // 기술 사용 턴에 즉시 호출하면 turns:1 랭크가 같은 턴에 만료되는 버그 발생
+  if(isEot) {
+    ALL_FS.forEach(s => {
+      const idx  = data[`${s}_active_idx`] ?? 0
+      const pkmn = entries[s][idx]
+      if(pkmn) tickRanks(pkmn, logEntries)
+    })
+  }
+
+  const { assistEventTs, syncEventTs } = await writeLogs(roomId, logEntries)
 
   const update = {
     ...buildEntryUpdate(entries),
