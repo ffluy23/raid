@@ -621,7 +621,8 @@ export default async function handler(req, res) {
 
     logEntries.push(makeLog("move_announce", `${myPkmn.name}의 구르기! (${rollTurn}번째)`))
 
-    const enemySlots = enemySlotsOf(mySlot)
+    const myTeamForRoll = teamOf(mySlot)
+    const enemySlots = myTeamForRoll === "A" ? ["p3","p4"] : ["p1","p2"]
     for(const eSlot of enemySlots) {
       const eIdx  = data[`${eSlot}_active_idx`] ?? 0
       const ePkmn = entries[eSlot][eIdx]
