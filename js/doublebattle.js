@@ -432,6 +432,31 @@ function updateMoveButtons(data) {
   const fainted     = !myPokemon || myPokemon.hp <= 0
   const movesArr    = myPokemon?.moves ?? []
 
+  // 참기 중이면 "참고있다..." 버튼만 표시
+  if(myPokemon?.bideState && myTurn && !actionDone && !isSpectator) {
+    for(let i = 0; i < 4; i++) {
+      const btn = $(`move-btn-${i}`)
+      if(!btn) continue
+      if(i === 0) {
+        btn.innerHTML = '<span style="font-size:13px">참고있다...</span>'
+        btn.disabled = false
+        btn.style.background = "#555"
+        btn.style.boxShadow  = "inset 0 0 0 2px white, 0 0 0 2px #555"
+        btn.onclick = () => {
+          if(actionDone) return
+          actionDone = true
+          updateMoveButtons(data)
+          _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: [] })
+            .catch(e => { console.error("bide skip 오류:", e.message); actionDone = false; updateMoveButtons(data) })
+        }
+      } else {
+        btn.innerHTML = '<span style="font-size:13px">-</span>'
+        btn.disabled = true; btn.onclick = null
+      }
+    }
+    return
+  }
+
   for(let i = 0; i < 4; i++) {
     const btn = $(`move-btn-${i}`)
     if(!btn) continue
