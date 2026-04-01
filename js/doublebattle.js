@@ -678,7 +678,11 @@ function updateAssistUI(data) {
 
   const popup = $("assist-popup")
   if(popup) {
-    if(req && req.to === mySlot && !isSpectator) {
+    // 내 포켓몬 기절 상태면 수락 불가 (팝업 숨김)
+    const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
+    const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
+    const myFainted = !myActivePkmn || myActivePkmn.hp <= 0
+    if(req && req.to === mySlot && !isSpectator && !myFainted) {
       popup.style.display = "block"
       const nameEl = $("assist-popup-name")
       if(nameEl) nameEl.innerText = req.fromName ?? req.from
@@ -722,7 +726,11 @@ function updateSyncUI(data) {
 
   const popup = $("sync-popup")
   if(popup) {
-    if(req && req.to === mySlot && !isSpectator) {
+    // 내 포켓몬 기절 상태면 수락 불가 (팝업 숨김)
+    const myActiveIdx2 = data[`${mySlot}_active_idx`] ?? 0
+    const myActivePkmn2 = data[`${mySlot}_entry`]?.[myActiveIdx2]
+    const myFainted2 = !myActivePkmn2 || myActivePkmn2.hp <= 0
+    if(req && req.to === mySlot && !isSpectator && !myFainted2) {
       popup.style.display = "block"
       const nameEl = $("sync-popup-name")
       if(nameEl) nameEl.innerText = req.fromName ?? req.from

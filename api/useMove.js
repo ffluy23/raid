@@ -271,6 +271,12 @@ function handleSpecialNonAttack(moveInfo, myPkmn, tSlots, entries, data, logEntr
     }
     return { handled:true }
   }
+  if(moveInfo.bide) {
+    myPkmn.bideState = { turnsLeft: 2, damage: 0 }
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참기 시작했다!`))
+    return { handled:true }
+  }
+
   if(moveInfo.chainBind) {
     if(tSlots.length === 0) return { handled:true }
     const tSlot = tSlots[0]
@@ -558,6 +564,53 @@ export default async function handler(req, res) {
   // ── logEntries: 타입 포함 로그 배열 ──────────────────────────────
   const logEntries = []
 
+  // ── 참기 자동처리 (bideState 있으면 기술 무시하고 참기 진행) ──────
+  const moveInfo_check = moves[moveData?.name]
+  if(myPkmn.bideState && !(moveInfo_check?.bide)) {
+    myPkmn.bideState.turnsLeft--
+    if(myPkmn.bideState.turnsLeft > 0) {
+      // 아직 참는 중
+      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
+    } else {
+      // 발사
+      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참고 있다...`))
+      const bide    = myPkmn.bideState
+      myPkmn.bideState = null
+      if(!bide || bide.damage <= 0) {
+        logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참기 발사에 실패했다!`))
+      } else {
+        const bideDmg = bide.damage * 2
+        logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name,"은는")} 참았던 에너지를 방출했다!`))
+        // 모든 상대 슬롯에 데미지
+        const enemySlots = enemySlotsOf(mySlot)
+        for(const eSlot of enemySlots) {
+          const eIdx  = data[`${eSlot}_active_idx`] ?? 0
+          const ePkmn = entries[eSlot][eIdx]
+          if(!ePkmn || ePkmn.hp <= 0) continue
+          ePkmn.hp = Math.max(0, ePkmn.hp - bideDmg)
+          logEntries.push(makeLog("hit", "", { defender: eSlot }))
+          logEntries.push(makeLog("hp",  "", { slot: eSlot, hp: ePkmn.hp, maxHp: ePkmn.maxHp }))
+          logEntries.push(makeLog("after_hit", `${bideDmg} 데미지!`))
+          if(ePkmn.hp <= 0) logEntries.push(makeLog("faint", `${ePkmn.name}${josa(ePkmn.name,"은는")} 쓰러졌다!`, { slot: eSlot }))
+        }
+      }
+    }
+    const { assistEventTs: aTs, syncEventTs: sTs } = await writeLogs(roomId, logEntries)
+    const newOrder = (data.current_order ?? []).slice(1)
+    const update = {
+      ...buildEntryUpdate(entries),
+      current_order: newOrder,
+      turn_count: (data.turn_count ?? 1) + 1,
+      ...(aTs !== null ? { assist_event: { ts: aTs } } : {}),
+      ...(sTs  !== null ? { sync_event:   { ts: sTs  } } : {}),
+    }
+    ALL_FS.forEach(s => { if(data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`] })
+    const winTeam = checkWin(entries)
+    if(winTeam) { update.game_over = true; update.winner_team = winTeam; update.current_order = [] }
+    await roomRef.update(update)
+    return res.status(200).json({ ok:true })
+  }
+
   const pre = checkPreActionStatus(myPkmn)
   pre.msgs.forEach(m => logEntries.push(makeLog("normal", m)))
 
@@ -698,8 +751,16 @@ export default async function handler(req, res) {
           if(isRequester && assistUsedThisTurn) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
 
           // 부가효과
-          applyMoveEffect(moveInfo?.effect, myPkmn, tPkmn, mainDmg).forEach(m => logEntries.push(makeLog("normal", m)))
+          // drain은 applyMoveEffect에 0 넘겨서 내부 처리 막고 여기서 직접 처리
+          applyMoveEffect({ ...moveInfo?.effect, drain: 0 }, myPkmn, tPkmn, mainDmg).forEach(m => logEntries.push(makeLog("normal", m)))
           if(moveInfo?.rank) applyRankChanges(moveInfo.rank, myPkmn, tPkmn, null, logEntries)
+
+          // drain 흡수 (한 번만)
+          if(moveInfo?.effect?.drain && mainDmg > 0) {
+            const heal = Math.max(1, Math.floor(mainDmg * moveInfo.effect.drain))
+            myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
+            logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name,"은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+          }
 
           // 반동
           if(moveInfo?.effect?.recoil && mainDmg > 0) {
@@ -738,13 +799,6 @@ export default async function handler(req, res) {
               logEntries.push(makeLog("after_hit", `${supPkmn.name}${josa(supPkmn.name,"이가")} 연속으로 추가 공격했다! (${bonusDmg} 데미지)`))
               if(tPkmn.hp <= 0) logEntries.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name,"은는")} 쓰러졌다!`, { slot: tSlot }))
             }
-          }
-
-          // drain 흡수
-          if(moveInfo?.effect?.drain && mainDmg > 0) {
-            const heal = Math.max(1, Math.floor(mainDmg * moveInfo.effect.drain))
-            myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-            logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name,"은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
           }
 
           // 받은 데미지 기록
