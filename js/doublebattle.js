@@ -147,9 +147,8 @@ function updateSlotUI(slot, data, isHpFromLog = false) {
   }
 
   const isMyTeam = prefix === "my" || prefix === "ally"
-  if(isHpFromLog) {
     updateHpBar(`${prefix}-hp-bar`, `${prefix}-active-hp`, pokemon.hp, pokemon.maxHp, isMyTeam)
-  }
+  
   updatePortrait(prefix, pokemon)
 }
 
