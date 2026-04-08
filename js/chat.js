@@ -1,4 +1,4 @@
-// chat.js
+// chat.js - 더블배틀 팀별 격리 채팅
 import {
   collection, addDoc, onSnapshot, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
@@ -22,46 +22,45 @@ function appendMessage(container, nickname, text) {
   container.scrollTop = container.scrollHeight
 }
 
-function subscribeChannel(db, ROOM_ID, channel, since, rendered, container) {
+function subscribeChannel(db, ROOM_ID, channel, gameStartedAt, rendered, container) {
   const ref = collection(db, "double", ROOM_ID, `chat_${channel}`)
-  const q = query(ref, orderBy("ts"), where("ts", ">=", since))
-  return onSnapshot(q, snap => {
-    const newDocs = []
+  const q = gameStartedAt > 0
+    ? query(ref, orderBy("ts"), where("ts", ">=", gameStartedAt))
+    : query(ref, orderBy("ts"))
+  onSnapshot(q, snap => {
     snap.docs.forEach(d => {
       if (rendered.has(d.id)) return
       rendered.add(d.id)
-      newDocs.push({ id: d.id, ...d.data() })
+      const { nickname, text } = d.data()
+      appendMessage(container, nickname, text)
     })
-    newDocs.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
-    newDocs.forEach(({ nickname, text }) => appendMessage(container, nickname, text))
   })
 }
 
 window.initDoubleChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt = 0 }) {
-  const channel   = getChatChannel(mySlot, isSpectator)
-  const container = document.getElementById("chat-messages")
-  if (!container) return
+  const channel = getChatChannel(mySlot, isSpectator)
+  const rendered = new Set()
 
-  // gameStartedAt이 없으면 현재 시각 기준으로 필터 (이전 게임 메시지 차단)
-  const since = gameStartedAt > 0 ? gameStartedAt : Date.now()
-
-  const labelEl  = document.getElementById("chat-channel-label")
-  const labelMap = { teamA: "🔵 팀A 채팅", teamB: "🔴 팀B 채팅" }
-  if (labelEl) labelEl.innerText = isSpectator ? "채팅" : (labelMap[channel] ?? "채팅")
+  const labelEl = document.getElementById("chat-channel-label")
+  const labelMap = { teamA: "🔵 팀A 채팅", teamB: "🔴 팀B 채팅", spectator: "관전자 채팅" }
+  if (labelEl) labelEl.innerText = labelMap[channel] ?? "채팅"
 
   if (isSpectator) {
+    // 팀 채팅 숨기고 관전자 섹션 표시
     const chatSection = document.getElementById("chat-section")
     if (chatSection) chatSection.style.display = "none"
     const spectatorSection = document.getElementById("spectator-chat-section")
     if (spectatorSection) spectatorSection.style.display = "block"
 
+    // 팀A, 팀B 읽기 전용 구독
     const containerA = document.getElementById("spectator-chat-a")
     const containerB = document.getElementById("spectator-chat-b")
-    if (containerA) subscribeChannel(db, ROOM_ID, "teamA", since, new Set(), containerA)
-    if (containerB) subscribeChannel(db, ROOM_ID, "teamB", since, new Set(), containerB)
+    if (containerA) subscribeChannel(db, ROOM_ID, "teamA", gameStartedAt, new Set(), containerA)
+    if (containerB) subscribeChannel(db, ROOM_ID, "teamB", gameStartedAt, new Set(), containerB)
 
+    // 관전자 채팅 구독 + 전송
     const spectatorContainer = document.getElementById("spectator-chat-messages")
-    if (spectatorContainer) subscribeChannel(db, ROOM_ID, "spectator", since, new Set(), spectatorContainer)
+    if (spectatorContainer) subscribeChannel(db, ROOM_ID, "spectator", gameStartedAt, new Set(), spectatorContainer)
 
     async function sendSpectatorChat() {
       const input = document.getElementById("spectator-chat-input")
@@ -80,7 +79,11 @@ window.initDoubleChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, game
     if (inputEl) inputEl.addEventListener("keypress", e => { if (e.key === "Enter") sendSpectatorChat() })
 
   } else {
-    subscribeChannel(db, ROOM_ID, channel, since, new Set(), container)
+    // 팀 플레이어: 원본 그대로
+    const container = document.getElementById("chat-messages")
+    if (!container) return
+    const ref = collection(db, "double", ROOM_ID, `chat_${channel}`)
+    subscribeChannel(db, ROOM_ID, channel, gameStartedAt, rendered, container)
 
     async function sendChat() {
       const input = document.getElementById("chat-input")
@@ -88,7 +91,6 @@ window.initDoubleChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, game
       const text = input.value.trim()
       if (!text) return
       const nickname = window.__myDisplayName ?? myUid.slice(0, 6)
-      const ref = collection(db, "double", ROOM_ID, `chat_${channel}`)
       await addDoc(ref, { uid: myUid, nickname, text, ts: Date.now() })
       input.value = ""
     }
