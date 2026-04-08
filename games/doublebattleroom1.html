@@ -93,7 +93,6 @@
       100%{transform:translate(-50%,-50%) scale(1)}
     }
 
-    /* 팀 이름 (큰 글씨) + 서브(& p2이름) */
     .vs-name     { font-size: clamp(1.2rem,4vw,2.8rem); font-weight: bold; letter-spacing: .15em; }
     .vs-name-sub { font-size: clamp(0.8rem,2.5vw,1.6rem); opacity: 0.8; letter-spacing: .1em; margin-top: 4px; }
 
@@ -336,6 +335,27 @@
     }
     #chat-send-btn:hover { background: #45a049; }
 
+    /* ── 관전자 채팅 ── */
+    #spectator-chat-section { display: none; }
+    .spectator-chat-box {
+      border-radius: 8px; overflow: hidden;
+    }
+    .spectator-chat-box.team-a { border: 1px solid #5185c5; }
+    .spectator-chat-box.team-b { border: 1px solid #e56c3e; }
+    .spectator-chat-label {
+      font-size: 11px; padding: 4px 8px; border-bottom: 1px solid;
+    }
+    .spectator-chat-box.team-a .spectator-chat-label {
+      color: #5185c5; background: #f0f4ff; border-color: #d0d8f0;
+    }
+    .spectator-chat-box.team-b .spectator-chat-label {
+      color: #e56c3e; background: #fff4f0; border-color: #f0d0c8;
+    }
+    .spectator-chat-messages {
+      height: 90px; overflow-y: auto;
+      padding: 5px 8px; font-size: 12px; line-height: 1.5;
+    }
+
     /* ── ASSIST! 애니메이션 ── */
     #assist-anim {
       position: fixed;
@@ -540,10 +560,12 @@
       #battle-log { height: 90px; font-size: 11px; }
       #chat-section { margin-top: 4px; }
       #chat-messages { height: 60px; }
+      .spectator-chat-messages { height: 70px; }
       .enemy-box { grid-template-columns: 1fr 1fr; gap: 6px; }
       .section-label.enemy { margin-left: 0; }
       .dice-num { font-size: 22px; }
       #battle-bottom { grid-column: 1 / -1; order: 5; margin-top: 6px; }
+      #spectator-chat-section { margin-top: 4px; }
     }
 
   </style>
@@ -586,9 +608,7 @@
     <div id="battle-screen">
 
       <!-- 팀 라벨 -->
-      <div id="team-labels">
-        
-      </div>
+      <div id="team-labels"></div>
 
       <!-- 5칼럼 배틀 영역 -->
       <div id="battle-top">
@@ -738,13 +758,27 @@
 
       </div><!-- /battle-top -->
 
-      <!-- 팀 채팅 -->
+      <!-- 팀 플레이어용 채팅 -->
       <div id="chat-section">
         <div id="chat-channel-label">채팅</div>
         <div id="chat-messages"></div>
         <div id="chat-input-row">
           <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
           <button id="chat-send-btn">전송</button>
+        </div>
+      </div>
+
+      <!-- 관전자 전용: 양 팀 채팅 동시 관람 -->
+      <div id="spectator-chat-section">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div class="spectator-chat-box team-a">
+            <div class="spectator-chat-label">🔵 팀A 채팅</div>
+            <div class="spectator-chat-messages" id="spectator-chat-a"></div>
+          </div>
+          <div class="spectator-chat-box team-b">
+            <div class="spectator-chat-label">🔴 팀B 채팅</div>
+            <div class="spectator-chat-messages" id="spectator-chat-b"></div>
+          </div>
         </div>
       </div>
 

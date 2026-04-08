@@ -1,5 +1,4 @@
 // chat.js - 더블배틀 팀별 격리 채팅
-// doublebattle.js에서 window.initDoubleChat({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt }) 호출
 import {
   collection, addDoc, onSnapshot, query, orderBy, where
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
@@ -23,47 +22,68 @@ function appendMessage(container, nickname, text) {
   container.scrollTop = container.scrollHeight
 }
 
-window.initDoubleChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt = 0 }) {
-  const channel = getChatChannel(mySlot, isSpectator)
+function subscribeChannel(db, ROOM_ID, channel, gameStartedAt, rendered, container) {
   const ref = collection(db, "double", ROOM_ID, `chat_${channel}`)
-  const rendered = new Set()
-
-  // 채널 라벨
-  const labelEl = document.getElementById("chat-channel-label")
-  const labelMap = { teamA: "🔵 팀A 채팅", teamB: "🔴 팀B 채팅", spectator: "관전자 채팅" }
-  if (labelEl) labelEl.innerText = labelMap[channel] ?? "채팅"
-
-  const container = document.getElementById("chat-messages")
-  if (!container) return
-
-  // gameStartedAt 이후 메시지만 쿼리
   const q = gameStartedAt > 0
     ? query(ref, orderBy("ts"), where("ts", ">=", gameStartedAt))
     : query(ref, orderBy("ts"))
 
-  onSnapshot(q, snap => {
+  return onSnapshot(q, snap => {
+    const newDocs = []
     snap.docs.forEach(d => {
       if (rendered.has(d.id)) return
       rendered.add(d.id)
-      const { nickname, text } = d.data()
-      appendMessage(container, nickname, text)
+      newDocs.push({ id: d.id, ...d.data() })
     })
+    newDocs.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+    newDocs.forEach(({ nickname, text }) => appendMessage(container, nickname, text))
   })
+}
 
-  // 전송
-  async function sendChat() {
-    const input = document.getElementById("chat-input")
-    if (!input) return
-    const text = input.value.trim()
-    if (!text) return
-    const nickname = window.__myDisplayName ?? myUid.slice(0, 6)
-    await addDoc(ref, { uid: myUid, nickname, text, ts: Date.now() })
-    input.value = ""
+window.initDoubleChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt = 0 }) {
+  const channel   = getChatChannel(mySlot, isSpectator)
+  const container = document.getElementById("chat-messages")
+  if (!container) return
+
+  const labelEl  = document.getElementById("chat-channel-label")
+  const labelMap = { teamA: "🔵 팀A 채팅", teamB: "🔴 팀B 채팅" }
+  if (labelEl) labelEl.innerText = isSpectator ? "채팅" : (labelMap[channel] ?? "채팅")
+
+  const rendered = new Set()
+
+  if (isSpectator) {
+    // 기존 채팅 숨기고 관전자용 채팅 표시
+    const chatSection = document.getElementById("chat-section")
+    if (chatSection) chatSection.style.display = "none"
+    const spectatorSection = document.getElementById("spectator-chat-section")
+    if (spectatorSection) spectatorSection.style.display = "block"
+
+    const containerA = document.getElementById("spectator-chat-a")
+    const containerB = document.getElementById("spectator-chat-b")
+    const renderedA  = new Set()
+    const renderedB  = new Set()
+
+    if (containerA) subscribeChannel(db, ROOM_ID, "teamA", gameStartedAt, renderedA, containerA)
+    if (containerB) subscribeChannel(db, ROOM_ID, "teamB", gameStartedAt, renderedB, containerB)
+
+  } else {
+    subscribeChannel(db, ROOM_ID, channel, gameStartedAt, rendered, container)
+
+    async function sendChat() {
+      const input = document.getElementById("chat-input")
+      if (!input) return
+      const text = input.value.trim()
+      if (!text) return
+      const nickname = window.__myDisplayName ?? myUid.slice(0, 6)
+      const ref = collection(db, "double", ROOM_ID, `chat_${channel}`)
+      await addDoc(ref, { uid: myUid, nickname, text, ts: Date.now() })
+      input.value = ""
+    }
+
+    const sendBtn = document.getElementById("chat-send-btn")
+    if (sendBtn) sendBtn.onclick = sendChat
+
+    const inputEl = document.getElementById("chat-input")
+    if (inputEl) inputEl.addEventListener("keypress", e => { if (e.key === "Enter") sendChat() })
   }
-
-  const sendBtn = document.getElementById("chat-send-btn")
-  if (sendBtn) sendBtn.onclick = sendChat
-
-  const inputEl = document.getElementById("chat-input")
-  if (inputEl) inputEl.addEventListener("keypress", e => { if (e.key === "Enter") sendChat() })
 }
