@@ -758,7 +758,7 @@
 
       </div><!-- /battle-top -->
 
-      <!-- 팀 플레이어용 채팅 -->
+     <!-- 팀 플레이어용 채팅 -->
       <div id="chat-section">
         <div id="chat-channel-label">채팅</div>
         <div id="chat-messages"></div>
@@ -768,17 +768,7 @@
         </div>
       </div>
 
-       <!-- 팀 플레이어용 채팅 -->
-      <div id="chat-section">
-        <div id="chat-channel-label">채팅</div>
-        <div id="chat-messages"></div>
-        <div id="chat-input-row">
-          <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
-          <button id="chat-send-btn">전송</button>
-        </div>
-      </div>
-
-      <!-- 관전자 전용: 양 팀 채팅 동시 관람 -->
+      <!-- 관전자 전용: 양 팀 채팅 동시 관람 + 관전자 채팅 -->
       <div id="spectator-chat-section" style="display:none">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <div class="spectator-chat-box team-a">
@@ -790,8 +780,17 @@
             <div class="spectator-chat-messages" id="spectator-chat-b"></div>
           </div>
         </div>
+        <div style="border:1px solid #ddd; border-radius:8px; overflow:hidden; margin-top:8px;">
+          <div style="font-size:11px; color:#888; padding:4px 8px; background:#f5f5f5; border-bottom:1px solid #eee;">👁 관전자 채팅</div>
+          <div id="spectator-chat-messages" style="height:70px; overflow-y:auto; padding:5px 8px; font-size:12px; line-height:1.5;"></div>
+          <div style="display:flex; border-top:1px solid #eee;">
+            <input id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200"
+              style="flex:1; border:none; padding:5px 8px; font-size:12px; outline:none; font-family:inherit;">
+            <button id="spectator-chat-send-btn"
+              style="border:none; background:#888; color:#fff; padding:0 12px; cursor:pointer; font-size:12px;">전송</button>
+          </div>
+        </div>
       </div>
-
     </div><!-- /battle-screen -->
   </div><!-- /battle-wrapper -->
 
