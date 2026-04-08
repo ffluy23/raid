@@ -768,8 +768,18 @@
         </div>
       </div>
 
+       <!-- 팀 플레이어용 채팅 -->
+      <div id="chat-section">
+        <div id="chat-channel-label">채팅</div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-row">
+          <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
+          <button id="chat-send-btn">전송</button>
+        </div>
+      </div>
+
       <!-- 관전자 전용: 양 팀 채팅 동시 관람 -->
-      <div id="spectator-chat-section">
+      <div id="spectator-chat-section" style="display:none">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <div class="spectator-chat-box team-a">
             <div class="spectator-chat-label">🔵 팀A 채팅</div>
@@ -780,8 +790,6 @@
             <div class="spectator-chat-messages" id="spectator-chat-b"></div>
           </div>
         </div>
-        <!-- 관전자 전용: 양 팀 채팅 동시 관람 -->
-<div id="spectator-chat-section" style="display:none">
       </div>
 
     </div><!-- /battle-screen -->
