@@ -308,7 +308,7 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
     const healRate = moveInfo.effect.heal ?? 0.5
     const heal     = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * healRate))
     myPkmn.hp      = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: myPkmn._slot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
     const types = Array.isArray(myPkmn.type) ? [...myPkmn.type] : [myPkmn.type]
     myPkmn._origType  = myPkmn.type
     myPkmn.type       = types.includes("비행") ? types.filter(t => t !== "비행") : ["노말"]
@@ -320,9 +320,25 @@ function handleSpecialNonAttack(moveInfo, myPkmn, mySlot, tSlots, entries, data,
 
   // 일반 HP 회복
   if (moveInfo.effect && moveInfo.effect.heal && moveInfo.targetSelf !== false) {
+    // 자신 회복
     const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * moveInfo.effect.heal))
     myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: myPkmn._slot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+
+    // 아군도 회복 (waterHeal 플래그 - 생명의물방울 전용)
+    if (moveInfo.waterHeal) {
+      const allySlotKey = allySlot(mySlot)
+      if (allySlotKey) {
+        const allyIdx  = data[`${allySlotKey}_active_idx`] ?? 0
+        const allyPkmn = entries[allySlotKey][allyIdx]
+        if (allyPkmn && allyPkmn.hp > 0) {
+          const allyHeal = Math.max(1, Math.floor((allyPkmn.maxHp ?? allyPkmn.hp) * moveInfo.effect.heal))
+          allyPkmn.hp    = Math.min(allyPkmn.maxHp ?? allyPkmn.hp, allyPkmn.hp + allyHeal)
+          logEntries.push(makeLog("hp", `${allyPkmn.name}${josa(allyPkmn.name, "도")} HP를 회복했다! (+${allyHeal})`, { slot: allySlotKey, hp: allyPkmn.hp, maxHp: allyPkmn.maxHp }))
+        }
+      }
+    }
+
     return { handled: true }
   }
 
@@ -836,12 +852,9 @@ export default async function handler(req, res) {
   const logEntries = []
 
   // ── tickVolatiles: EOT 아닌 매 행동 전에 각 슬롯 처리 ─────────
-  // (더블은 order 기반이라 내 턴 시작 시 내 포켓몬만)
   {
     const volatileMsgs = tickVolatiles(myPkmn)
     volatileMsgs.forEach(m => logEntries.push(makeLog("normal", m)))
-    // HP가 wish 등으로 변동됐으면 hp 로그
-    // (tickVolatiles 내부에서 직접 hp 조정)
   }
 
   // ── 공중날기 2턴째 자동처리 ──────────────────────────────────
@@ -974,7 +987,6 @@ export default async function handler(req, res) {
       if (!myPkmn.usedMoves.includes(moveData.name)) myPkmn.usedMoves.push(moveData.name)
 
       const moveInfo     = moves[moveData.name]
-      // moveInfo에 기술명 주입 (defend 연속 판정용)
       if (moveInfo) moveInfo._name = moveData.name
       logEntries.push(makeLog("move_announce", `${myPkmn.name}의 ${moveData.name}!`))
 
@@ -1055,7 +1067,6 @@ export default async function handler(req, res) {
             continue
           }
 
-          // 자이로볼/어시스트파워 위력 오버라이드
           let powerOverride = null
           if (moveInfo?.gyroBall)    powerOverride = calcGyroBallPower(myPkmn, tPkmn)
           if (moveInfo?.assistPower) powerOverride = calcAssistPower(myPkmn)
@@ -1064,10 +1075,8 @@ export default async function handler(req, res) {
           if (!isAoe) logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
           if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
-          // 어시스트 배율
           if (isRequester) { damage = Math.floor(damage * 1.15); assistUsedThisTurn = true }
 
-          // 싱크로나이즈
           const tTeam        = teamOf(tSlot)
           const syncKey      = `sync_team${tTeam}`
           const sync         = data[syncKey] ?? null
@@ -1100,13 +1109,11 @@ export default async function handler(req, res) {
           if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
           if (isRequester && assistUsedThisTurn) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
 
-          // breakBarrier: 빛의 장막 파괴
           if (moveInfo?.breakBarrier && (tPkmn.lightScreenTurns ?? 0) > 0) {
             tPkmn.lightScreenTurns = 0
             logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "의")} 빛의 장막이 깨졌다!`))
           }
 
-          // rapidSpin: 씨뿌리기 해제
           if (moveInfo?.rapidSpin && myPkmn.seeded) {
             myPkmn.seeded    = false
             myPkmn.seederSlot = null
@@ -1130,7 +1137,6 @@ export default async function handler(req, res) {
 
           if (tPkmn.hp <= 0) logEntries.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name, "은는")} 쓰러졌다!`, { slot: tSlot }))
 
-          // 싱크 스필 데미지
           if (spillDmg > 0 && syncAllyPkmn && syncAllyPkmn.hp > 0) {
             if (syncAllyPkmn.enduring && spillDmg >= syncAllyPkmn.hp) { spillDmg = syncAllyPkmn.hp - 1; logEntries.push(makeLog("after_hit", `${syncAllyPkmn.name}${josa(syncAllyPkmn.name, "은는")} 버텼다!`)) }
             syncAllyPkmn.enduring = false
@@ -1141,7 +1147,6 @@ export default async function handler(req, res) {
             if (syncAllyPkmn.hp <= 0) logEntries.push(makeLog("faint", `${syncAllyPkmn.name}${josa(syncAllyPkmn.name, "은는")} 쓰러졌다!`, { slot: syncAllySlot }))
           }
 
-          // 어시스트 추가 공격
           if (isRequester && assistUsedThisTurn && supporterSlot) {
             const supPkmn = entries[supporterSlot]?.[data[`${supporterSlot}_active_idx`] ?? 0]
             if (supPkmn && supPkmn.hp > 0 && tPkmn.hp > 0) {
