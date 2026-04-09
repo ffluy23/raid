@@ -65,6 +65,12 @@ const TYPE_COLORS = {
   "드래곤":"#535ca8","악":"#4c4948","강철":"#69a9c7","페어리":"#dab4d4"
 }
 
+// ── 자동행동 타이머 ──────────────────────────────
+let timerTickInterval = null
+let timerSecondsLeft  = 120
+let lastTurnSlot      = null
+const TIMER_SECONDS   = 120
+
 // ── 유틸 ─────────────────────────────────────────
 function $(id) { return document.getElementById(id) }
 function rollD10() { return Math.floor(Math.random() * 10) + 1 }
@@ -142,11 +148,9 @@ function updateSlotUI(slot, data) {
     const STATUS_LABEL = { "마비": "[마비]", "화상": "[화상]", "독": "[독]", "얼음": "[얼음]" }
     const statusTag    = pokemon.status ? " " + (STATUS_LABEL[pokemon.status] ?? "") : ""
     const confusionTag = (pokemon.confusion ?? 0) > 0 ? " [혼란]" : ""
-    // 공중날기 / 구멍파기 상태 표시 (싱글 포팅)
-    const flyTag    = pokemon.flyState?.flying   ? " ✈" : ""
-    const digTag    = pokemon.digState?.digging  ? " ⛏" : ""
-    // 빛의 장막 표시
-    const screenTag = (pokemon.lightScreenTurns ?? 0) > 0
+    const flyTag       = pokemon.flyState?.flying   ? " ✈" : ""
+    const digTag       = pokemon.digState?.digging  ? " ⛏" : ""
+    const screenTag    = (pokemon.lightScreenTurns ?? 0) > 0
       ? ` [막(${pokemon.lightScreenTurns})]` : ""
     nameEl.innerText = (pokemon.name ?? "???") + statusTag + confusionTag + flyTag + digTag + screenTag
   }
@@ -154,6 +158,122 @@ function updateSlotUI(slot, data) {
   const isMyTeam = prefix === "my" || prefix === "ally"
   updateHpBar(`${prefix}-hp-bar`, `${prefix}-active-hp`, pokemon.hp, pokemon.maxHp, isMyTeam)
   updatePortrait(prefix, pokemon)
+}
+
+// ════════════════════════════════════════════════════
+//  자동행동 타이머 (숫자 카운트다운)
+// ════════════════════════════════════════════════════
+
+function updateTimerDisplay() {
+  const el = $("turn-timer")
+  if (!el) return
+  const m = Math.floor(timerSecondsLeft / 60)
+  const s = timerSecondsLeft % 60
+  el.innerText = `${m}:${String(s).padStart(2, "0")}`
+  el.style.color = timerSecondsLeft <= 30 ? "#f44336"
+                 : timerSecondsLeft <= 60 ? "#ff9800"
+                 : "#888"
+}
+
+function startTurnTimer(data) {
+  clearTurnTimer()
+  timerSecondsLeft = TIMER_SECONDS
+  const el = $("turn-timer")
+  if (el) el.style.display = "inline"
+  updateTimerDisplay()
+
+  timerTickInterval = setInterval(() => {
+    timerSecondsLeft--
+    updateTimerDisplay()
+    if (timerSecondsLeft <= 0) {
+      clearTurnTimer()
+      if (!isSpectator) triggerAutoAction(data)
+    }
+  }, 1000)
+}
+
+function clearTurnTimer() {
+  if (timerTickInterval) { clearInterval(timerTickInterval); timerTickInterval = null }
+  const el = $("turn-timer")
+  if (el) { el.style.display = "none"; el.innerText = "" }
+}
+
+function triggerAutoAction(data) {
+  if (actionDone || !myTurn || isSpectator) return
+
+  const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
+  const myPkmn      = data[`${mySlot}_entry`]?.[myActiveIdx]
+  if (!myPkmn || myPkmn.hp <= 0) return
+
+  const movesArr   = myPkmn.moves ?? []
+  const chainBound = myPkmn.chainBound ?? null
+  const usable     = movesArr
+    .map((mv, i) => ({ mv, i }))
+    .filter(({ mv }) => mv.pp > 0 && !(chainBound && chainBound.moveName === mv.name))
+
+  // 로그 메시지
+  const logEl = $("battle-log")
+  if (logEl) {
+    const p = document.createElement("p")
+    p.style.color     = "#e67e22"
+    p.style.fontStyle = "italic"
+    p.textContent     = usable.length === 0
+      ? `⏰ 시간 초과! 자동으로 턴을 넘깁니다...`
+      : `⏰ 시간 초과! 자동으로 행동합니다!`
+    logEl.appendChild(p)
+    logEl.scrollTop = logEl.scrollHeight
+  }
+
+  if (usable.length === 0) {
+    actionDone = true
+    doSkipTurn()
+    return
+  }
+
+  const { mv, i: moveIdx } = usable[Math.floor(Math.random() * usable.length)]
+  const moveInfo = moves[mv.name] ?? {}
+
+  if (moveInfo.aoe) {
+    const aoeTargets = ["p1","p2","p3","p4"].filter(s => {
+      if (s === mySlot) return false
+      const ai = data[`${s}_active_idx`] ?? 0
+      const p  = data[`${s}_entry`]?.[ai]
+      return p && p.hp > 0
+    })
+    doUseMove(moveIdx, aoeTargets, data); return
+  }
+
+  if (moveInfo.aoeEnemy) {
+    const et = enemySlotsOf(mySlot).filter(s => {
+      const ai = data[`${s}_active_idx`] ?? 0
+      const p  = data[`${s}_entry`]?.[ai]
+      return p && p.hp > 0
+    })
+    doUseMove(moveIdx, et, data); return
+  }
+
+  const r = moveInfo.rank
+  const needsTarget =
+    moveInfo.power
+    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
+    || moveInfo.roar || moveInfo.leechSeed || moveInfo.chainBind
+    || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder
+    || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
+    || (moveInfo.effect?.status && moveInfo.targetSelf === false)
+
+  if (needsTarget) {
+    const enemies = enemySlotsOf(mySlot).filter(s => {
+      const ai = data[`${s}_active_idx`] ?? 0
+      const p  = data[`${s}_entry`]?.[ai]
+      return p && p.hp > 0
+    })
+    const target = enemies.length > 0
+      ? enemies[Math.floor(Math.random() * enemies.length)]
+      : null
+    doUseMove(moveIdx, target ? [target] : [], data)
+  } else {
+    doUseMove(moveIdx, [], data)
+  }
 }
 
 // ── 로그 큐: 타입별 핸들러 ──────────────────────
@@ -423,7 +543,6 @@ function updateMoveButtons(data) {
   const movesArr    = myPokemon?.moves ?? []
   const chainBound  = myPokemon?.chainBound ?? null
 
-  // 공중날기/구멍파기 중이면 기술 버튼 전체 잠금 (자동처리)
   const isAutoTurn = !!(myPokemon?.flyState?.flying || myPokemon?.digState?.digging
                      || myPokemon?.bideState || myPokemon?.rollState?.active)
 
@@ -452,7 +571,6 @@ function updateMoveButtons(data) {
       continue
     }
 
-    // 공중날기/구멍파기 1턴째 진행 중: 해당 기술만 표시, 잠금
     if (isAutoTurn) {
       const isActiveFly = myPokemon?.flyState?.flying  && moveInfo.fly
       const isActiveDig = myPokemon?.digState?.digging && moveInfo.dig
@@ -569,6 +687,7 @@ function exitTargetMode() {
 
 async function doUseMove(moveIdx, targetSlots, data) {
   if (actionDone) return
+  clearTurnTimer()   // ← 타이머 초기화
   actionDone = true
   updateMoveButtons(data)
   try {
@@ -621,6 +740,7 @@ async function doSwitchPokemon(newIdx, data) {
   const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
 
   if (!isFainted && actionDone) return
+  clearTurnTimer()   // ← 타이머 초기화
   if (!isFainted) actionDone = true
 
   const bench = $("bench-container")
@@ -800,6 +920,7 @@ function updateSyncUI(data) {
 function showGameOver(data) {
   if (gameOver) return
   gameOver = true
+  clearTurnTimer()
   exitTargetMode()
 
   const myTeam = teamOf(mySlot)
@@ -877,28 +998,61 @@ function listenRoom() {
     const data = snap.data()
     if (!data || !data.p1_entry) return
 
+    const order           = data.current_order ?? []
+    const currentTurnSlot = order[0] ?? null
+
+    // ── 턴 슬롯 변경 감지 → 타이머 리셋 (관전자 포함) ──
+    if (currentTurnSlot !== lastTurnSlot) {
+      lastTurnSlot = currentTurnSlot
+      if (currentTurnSlot && !data.game_over) {
+        if (isSpectator) {
+          // 관전자: UI 표시만, 자동행동 없음
+          clearTurnTimer()
+          timerSecondsLeft = TIMER_SECONDS
+          const el = $("turn-timer")
+          if (el) { el.style.display = "inline"; updateTimerDisplay() }
+          timerTickInterval = setInterval(() => {
+            timerSecondsLeft--
+            updateTimerDisplay()
+            if (timerSecondsLeft <= 0) clearTurnTimer()
+          }, 1000)
+        }
+      } else {
+        clearTurnTimer()
+      }
+    }
+
     if (!isSpectator && !data.game_over) {
-      const order       = data.current_order ?? []
       const wasMyTurn   = myTurn
       const isMyTurnNow = order[0] === mySlot
       myTurn = isMyTurnNow
-      if (!wasMyTurn && isMyTurnNow) actionDone = false
+
+      if (!wasMyTurn && isMyTurnNow) {
+        actionDone = false
+
+        const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
+        const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
+        const isAutoTurnNow = !!(
+          myActivePkmn?.bideState        ||
+          myActivePkmn?.rollState?.active ||
+          myActivePkmn?.flyState?.flying  ||
+          myActivePkmn?.digState?.digging
+        )
+
+        // 자동처리 턴이 아닐 때만 타이머 시작
+        if (!isAutoTurnNow) startTurnTimer(data)
+      }
 
       if (myTurn && !actionDone) {
         const myEntry = data[`${mySlot}_entry`] ?? []
         if (myEntry.every(p => p.hp <= 0)) {
-          // 팀 전멸 → 스킵
           actionDone = true; doSkipTurn()
         } else {
           const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
           const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-
-          // 참기/구르기 자동처리
           const needsAutoMove = myActivePkmn?.bideState || myActivePkmn?.rollState?.active
-
-          // 공중날기/구멍파기 2턴째 자동처리 (싱글 포팅)
-          const needsAutoFly = myActivePkmn?.flyState?.flying
-          const needsAutoDig = myActivePkmn?.digState?.digging
+          const needsAutoFly  = myActivePkmn?.flyState?.flying
+          const needsAutoDig  = myActivePkmn?.digState?.digging
 
           if (needsAutoMove || needsAutoFly || needsAutoDig) {
             actionDone = true
