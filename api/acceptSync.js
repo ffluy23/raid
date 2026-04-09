@@ -19,6 +19,19 @@ export default async function handler(req, res) {
   if(!syncReq || syncReq.to !== mySlot)
     return res.status(403).json({ error: "수락할 요청 없음" })
 
+  // ── 요청자 포켓몬이 살아있는지 체크 ──────────────────────────
+  const requesterSlot      = syncReq.from
+  const requesterActiveIdx = data[`${requesterSlot}_active_idx`] ?? 0
+  const requesterPkmn      = data[`${requesterSlot}_entry`]?.[requesterActiveIdx]
+  if(!requesterPkmn || requesterPkmn.hp <= 0)
+    return res.status(403).json({ error: "요청자 포켓몬이 쓰러진 상태" })
+
+  // ── 수락자(내) 포켓몬이 살아있는지 체크 ──────────────────────
+  const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
+  const myPkmn      = data[`${mySlot}_entry`]?.[myActiveIdx]
+  if(!myPkmn || myPkmn.hp <= 0)
+    return res.status(403).json({ error: "내 포켓몬이 쓰러진 상태" })
+
   const myTeam      = teamOf(mySlot)
   const myName      = data[`${roomName(mySlot)}_name`] ?? mySlot
   const syncLogText = `💠 ${syncReq.fromName}${josa(syncReq.fromName,"과와")} ${myName}${josa(myName,"이가")} 싱크로나이즈를 맺었다!`
@@ -29,5 +42,5 @@ export default async function handler(req, res) {
     sync_request:            null,
     [`sync_log_${myTeam}`]:  syncLogText
   })
-  return res.status(200).json({ ok:true })
+  return res.status(200).json({ ok: true })
 }

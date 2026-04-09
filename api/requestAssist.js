@@ -21,11 +21,24 @@ export default async function handler(req, res) {
   if(data[`assist_team${myTeam}`])  return res.status(403).json({ error: "어시스트가 이미 활성화됨" })
   if(data.assist_request)           return res.status(403).json({ error: "이미 요청 중" })
 
+  // ── 내 포켓몬이 살아있는지 체크 ──────────────────────────────
+  const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
+  const myPkmn      = data[`${mySlot}_entry`]?.[myActiveIdx]
+  if(!myPkmn || myPkmn.hp <= 0)
+    return res.status(403).json({ error: "내 포켓몬이 쓰러진 상태" })
+
+  // ── 아군 포켓몬이 살아있는지 체크 ────────────────────────────
+  const ally         = allySlot(mySlot)
+  const allyActiveIdx = data[`${ally}_active_idx`] ?? 0
+  const allyPkmn      = data[`${ally}_entry`]?.[allyActiveIdx]
+  if(!allyPkmn || allyPkmn.hp <= 0)
+    return res.status(403).json({ error: "아군 포켓몬이 쓰러진 상태" })
+
   const myName = data[`${roomName(mySlot)}_name`] ?? mySlot
-  const ally   = allySlot(mySlot)
+  const allyName = data[`${roomName(ally)}_name`] ?? ally
 
   await roomRef.update({
-    assist_request: { from: mySlot, fromName: myName, to: ally, ts: Date.now() }
+    assist_request: { from: mySlot, fromName: myName, to: ally, toName: allyName, ts: Date.now() }
   })
-  return res.status(200).json({ ok:true })
+  return res.status(200).json({ ok: true })
 }

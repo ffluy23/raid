@@ -19,15 +19,28 @@ export default async function handler(req, res) {
   if(!assistReq || assistReq.to !== mySlot)
     return res.status(403).json({ error: "수락할 요청 없음" })
 
+  // ── 요청자 포켓몬이 살아있는지 체크 ──────────────────────────
+  const requesterSlot    = assistReq.from
+  const requesterActiveIdx = data[`${requesterSlot}_active_idx`] ?? 0
+  const requesterPkmn    = data[`${requesterSlot}_entry`]?.[requesterActiveIdx]
+  if(!requesterPkmn || requesterPkmn.hp <= 0)
+    return res.status(403).json({ error: "요청자 포켓몬이 쓰러진 상태" })
+
+  // ── 수락자(내) 포켓몬이 살아있는지 체크 ──────────────────────
+  const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
+  const myPkmn      = data[`${mySlot}_entry`]?.[myActiveIdx]
+  if(!myPkmn || myPkmn.hp <= 0)
+    return res.status(403).json({ error: "내 포켓몬이 쓰러진 상태" })
+
   const myTeam = teamOf(mySlot)
   const myName = data[`${roomName(mySlot)}_name`] ?? mySlot
 
   await roomRef.update({
-    [`assist_team${myTeam}`]:  { requester: assistReq.from, requesterName: assistReq.fromName, supporter: mySlot, supporterName: myName },
+    [`assist_team${myTeam}`]: { requester: assistReq.from, requesterName: assistReq.fromName, supporter: mySlot, supporterName: myName },
     assist_request: null
   })
   await writeLogs(db, roomId, [
     `🤝 ${assistReq.fromName}${josa(assistReq.fromName,"과와")} ${myName}${josa(myName,"이가")} 어시스트를 맺었다!`
   ])
-  return res.status(200).json({ ok:true })
+  return res.status(200).json({ ok: true })
 }
