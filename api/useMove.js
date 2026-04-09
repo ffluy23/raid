@@ -1054,16 +1054,18 @@ export default async function handler(req, res) {
           const tPkmn = entries[tSlot][tIdx]
           if (!tPkmn || tPkmn.hp <= 0) continue
 
-          if (tPkmn.defending) {
-            logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 방어했다!`))
-            if (moveInfo?.jumpKick) {
-              const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.25))
-              myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
-              logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${selfDmg} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-              if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
-            }
-            continue
-          }
+      if (tPkmn.defending) {
+  logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 방어했다!`))
+  if (moveInfo?.jumpKick) {
+    const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.25))
+    myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
+    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${selfDmg} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+    if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+  }
+  tPkmn.defending = false 
+  tPkmn.defendTurns = 0     
+  continue
+}
 
           const specialAtk = handleSpecialAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlot, tPkmn, entries, data, logEntries)
           if (specialAtk.handled) continue
