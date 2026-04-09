@@ -43,7 +43,7 @@ export const moves = {
   "몸통박치기": { power: 30, type: "노말", accuracy: 100, alwaysHit: false, effect: null },
   "하이퍼보이스":{ power: 50, type: "노말", accuracy: 100, alwaysHit: false, effect: null },
   "속이기":     { power: 30, type: "노말", accuracy: 70, alwaysHit: false,
-                  effect: null, fakeOut: true, aoeEnemy: true },
+                  effect: null, fakeOut: true },
   "성장":     { power: 0, type: "노말", accuracy: 100, alwaysHit: true, effect: null,
                 rank: { atk: 1, turns: 2 } },
   "야금야금":   { power: 40, type: "노말", accuracy: 100, alwaysHit: false, skipEvasion: true, effect: null },

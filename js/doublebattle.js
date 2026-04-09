@@ -69,7 +69,7 @@ const TYPE_COLORS = {
 let timerTickInterval = null
 let timerSecondsLeft  = 120
 let lastTurnSlot      = null
-const TIMER_SECONDS   = 90
+const TIMER_SECONDS   = 60
 
 // ── 유틸 ─────────────────────────────────────────
 function $(id) { return document.getElementById(id) }

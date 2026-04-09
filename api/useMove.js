@@ -457,7 +457,10 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     if (pkmn.hp <= 0)   logEntries.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot }))
   }
 
-  // 속이기 fakeOut (싱글 포팅)
+  // 속이기 fakeOut
+  // ★ BUG FIX 1: 실패 시 myPkmn(자기 자신)의 방어 랭크를 내려야 함
+  //   기존: applyRankChanges({ def: -2 }, myPkmn, tPkmn, ...) → tPkmn 방어 랭크 다운 (잘못됨)
+  //   수정: applyRankChanges({ def: -2 }, myPkmn, myPkmn, ...) → myPkmn 방어 랭크 다운
   if (moveInfo.fakeOut) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
@@ -472,7 +475,7 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
       return { handled: true, damage }
     } else {
       logEntries.push(makeLog("normal", `속이기에 실패했다!`))
-      applyRankChanges({ def: -2, turns: 2 }, myPkmn, tPkmn, null, logEntries)
+      applyRankChanges({ def: -2, turns: 2 }, myPkmn, myPkmn, null, logEntries)  // ✅ 수정
       return { handled: true, damage: 0 }
     }
   }
@@ -798,7 +801,7 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
     ...buildEntryUpdate(entries),
     current_order:   newOrder,
     turn_count:      (data.turn_count ?? 1) + 1,
-    turn_started_at: newOrder.length > 0 ? Date.now() : null,  // ← 추가
+    turn_started_at: newOrder.length > 0 ? Date.now() : null,
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
     ...update,
@@ -811,7 +814,7 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
     finalUpdate.game_over      = true
     finalUpdate.winner_team    = winTeam
     finalUpdate.current_order  = []
-    finalUpdate.turn_started_at = null  // ← 게임 끝나면 null
+    finalUpdate.turn_started_at = null
   }
   await roomRef.update(finalUpdate)
   return winTeam
@@ -1153,7 +1156,10 @@ export default async function handler(req, res) {
             if (syncAllyPkmn.hp <= 0) logEntries.push(makeLog("faint", `${syncAllyPkmn.name}${josa(syncAllyPkmn.name, "은는")} 쓰러졌다!`, { slot: syncAllySlot }))
           }
 
-          if (isRequester && assistUsedThisTurn && supporterSlot) {
+          // ★ BUG FIX 2: 어시스트 추가 공격은 적 팀에게만 적용
+          //   기존: teamOf(tSlot) 체크 없음 → AoE 시 아군 슬롯도 추가 공격됨
+          //   수정: teamOf(tSlot) !== myTeam 조건 추가
+          if (isRequester && assistUsedThisTurn && supporterSlot && teamOf(tSlot) !== myTeam) {
             const supPkmn = entries[supporterSlot]?.[data[`${supporterSlot}_active_idx`] ?? 0]
             if (supPkmn && supPkmn.hp > 0 && tPkmn.hp > 0) {
               logEntries.push(makeLog("assist", ""))
@@ -1219,7 +1225,7 @@ export default async function handler(req, res) {
     ...syncUpdate,
     current_order:   newOrder,
     turn_count:      newTurnCount,
-    turn_started_at: newOrder.length > 0 ? Date.now() : null,  // ← 추가
+    turn_started_at: newOrder.length > 0 ? Date.now() : null,
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
   }
@@ -1233,7 +1239,7 @@ export default async function handler(req, res) {
     update.game_over      = true
     update.winner_team    = winTeam
     update.current_order  = []
-    update.turn_started_at = null  // ← 게임 끝나면 null
+    update.turn_started_at = null
     await roomRef.update(update)
     return res.status(200).json({ ok: true, winTeam })
   }
