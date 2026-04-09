@@ -69,7 +69,7 @@ const TYPE_COLORS = {
 let timerTickInterval = null
 let timerSecondsLeft  = 120
 let lastTurnSlot      = null
-const TIMER_SECONDS   = 120
+const TIMER_SECONDS   = 90
 
 // ── 유틸 ─────────────────────────────────────────
 function $(id) { return document.getElementById(id) }
@@ -161,7 +161,7 @@ function updateSlotUI(slot, data) {
 }
 
 // ════════════════════════════════════════════════════
-//  자동행동 타이머 (숫자 카운트다운)
+//  자동행동 타이머 (turn_started_at 서버 기준)
 // ════════════════════════════════════════════════════
 
 function updateTimerDisplay() {
@@ -175,16 +175,26 @@ function updateTimerDisplay() {
                  : "#888"
 }
 
-function startTurnTimer(data) {
+// turnStartedAt: Firestore의 turn_started_at 값 (밀리초)
+function startTurnTimer(turnStartedAt, data) {
   clearTurnTimer()
-  timerSecondsLeft = TIMER_SECONDS
   const el = $("turn-timer")
   if (el) el.style.display = "inline"
+
+  // 즉시 한 번 계산해서 표시
+  const calcRemaining = () => {
+    const elapsed = Math.floor((Date.now() - turnStartedAt) / 1000)
+    return Math.max(0, TIMER_SECONDS - elapsed)
+  }
+
+  timerSecondsLeft = calcRemaining()
   updateTimerDisplay()
 
   timerTickInterval = setInterval(() => {
-    timerSecondsLeft--
+    // 클라이언트 로컬 시간이 아니라 서버 기준점으로 계산
+    timerSecondsLeft = calcRemaining()
     updateTimerDisplay()
+
     if (timerSecondsLeft <= 0) {
       clearTurnTimer()
       if (!isSpectator) triggerAutoAction(data)
@@ -211,22 +221,9 @@ function triggerAutoAction(data) {
     .map((mv, i) => ({ mv, i }))
     .filter(({ mv }) => mv.pp > 0 && !(chainBound && chainBound.moveName === mv.name))
 
-  // 로그 메시지
-  const logEl = $("battle-log")
-  if (logEl) {
-    const p = document.createElement("p")
-    p.style.color     = "#e67e22"
-    p.style.fontStyle = "italic"
-    p.textContent     = usable.length === 0
-      ? `⏰ 시간 초과! 자동으로 턴을 넘깁니다...`
-      : `⏰ 시간 초과! 자동으로 행동합니다!`
-    logEl.appendChild(p)
-    logEl.scrollTop = logEl.scrollHeight
-  }
-
   if (usable.length === 0) {
     actionDone = true
-    doSkipTurn()
+    doSkipTurn(true)  // ← timerExpired: true
     return
   }
 
@@ -687,7 +684,7 @@ function exitTargetMode() {
 
 async function doUseMove(moveIdx, targetSlots, data) {
   if (actionDone) return
-  clearTurnTimer()   // ← 타이머 초기화
+  clearTurnTimer()
   actionDone = true
   updateMoveButtons(data)
   try {
@@ -740,7 +737,7 @@ async function doSwitchPokemon(newIdx, data) {
   const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
 
   if (!isFainted && actionDone) return
-  clearTurnTimer()   // ← 타이머 초기화
+  clearTurnTimer()
   if (!isFainted) actionDone = true
 
   const bench = $("bench-container")
@@ -941,9 +938,10 @@ function showGameOver(data) {
 }
 
 // ── 턴 스킵 ─────────────────────────────────────
-async function doSkipTurn() {
+// timerExpired: true면 타이머 만료로 인한 스킵 (서버에서 로그 기록)
+async function doSkipTurn(timerExpired = false) {
   try {
-    await _skipTurn({ roomId: ROOM_ID, mySlot })
+    await _skipTurn({ roomId: ROOM_ID, mySlot, timerExpired })
   } catch (e) {
     console.warn("skipTurn 오류:", e.message)
     actionDone = false
@@ -1001,24 +999,32 @@ function listenRoom() {
     const order           = data.current_order ?? []
     const currentTurnSlot = order[0] ?? null
 
-    // ── 턴 슬롯 변경 감지 → 타이머 리셋 (관전자 포함) ──
+    // ── 턴 슬롯 변경 감지 → 타이머 리셋 ──────────────────────────
     if (currentTurnSlot !== lastTurnSlot) {
       lastTurnSlot = currentTurnSlot
+      clearTurnTimer()
+
       if (currentTurnSlot && !data.game_over) {
+        // turn_started_at이 없으면 현재 시간을 기준으로 폴백
+        const turnStartedAt = data.turn_started_at ?? Date.now()
+
         if (isSpectator) {
           // 관전자: UI 표시만, 자동행동 없음
-          clearTurnTimer()
-          timerSecondsLeft = TIMER_SECONDS
+          const calcRemaining = () => {
+            const elapsed = Math.floor((Date.now() - turnStartedAt) / 1000)
+            return Math.max(0, TIMER_SECONDS - elapsed)
+          }
+          timerSecondsLeft = calcRemaining()
           const el = $("turn-timer")
-          if (el) { el.style.display = "inline"; updateTimerDisplay() }
+          if (el) el.style.display = "inline"
+          updateTimerDisplay()
+
           timerTickInterval = setInterval(() => {
-            timerSecondsLeft--
+            timerSecondsLeft = calcRemaining()
             updateTimerDisplay()
             if (timerSecondsLeft <= 0) clearTurnTimer()
           }, 1000)
         }
-      } else {
-        clearTurnTimer()
       }
     }
 
@@ -1039,14 +1045,17 @@ function listenRoom() {
           myActivePkmn?.digState?.digging
         )
 
-        // 자동처리 턴이 아닐 때만 타이머 시작
-        if (!isAutoTurnNow) startTurnTimer(data)
+        // 자동처리 턴이 아닐 때만 타이머 시작 (서버 기준 turn_started_at 사용)
+        if (!isAutoTurnNow) {
+          const turnStartedAt = data.turn_started_at ?? Date.now()
+          startTurnTimer(turnStartedAt, data)
+        }
       }
 
       if (myTurn && !actionDone) {
         const myEntry = data[`${mySlot}_entry`] ?? []
         if (myEntry.every(p => p.hp <= 0)) {
-          actionDone = true; doSkipTurn()
+          actionDone = true; doSkipTurn(false)
         } else {
           const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
           const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]

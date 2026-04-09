@@ -83,6 +83,7 @@ export default async function handler(req, res) {
     [`${mySlot}_active_idx`]: newIdx,
     current_order:     newOrder,
     turn_count:        newTurnCount,
+    turn_started_at:   newOrder.length > 0 ? Date.now() : null,  // ← 추가
     hit_event:         null,
     dice_event:        null,
     attack_dice_event: null

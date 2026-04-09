@@ -41,9 +41,11 @@ export default async function handler(req, res) {
         return diff !== 0 ? diff : (Math.random() < 0.5 ? -1 : 1)
       })
 
+      // ── turn_started_at: 첫 번째 턴 시작 시각 기록 ──────────
       tx.update(roomRef, {
-        round_count:   roundNum,
-        current_order: order,
+        round_count:     roundNum,
+        current_order:   order,
+        turn_started_at: Date.now(),
         dice_event: { type:"all", rolls, order, slots:activeSlots, ts:Date.now() }
       })
 

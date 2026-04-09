@@ -796,8 +796,9 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
   const newOrder = (data.current_order ?? []).slice(1)
   const finalUpdate = {
     ...buildEntryUpdate(entries),
-    current_order: newOrder,
-    turn_count: (data.turn_count ?? 1) + 1,
+    current_order:   newOrder,
+    turn_count:      (data.turn_count ?? 1) + 1,
+    turn_started_at: newOrder.length > 0 ? Date.now() : null,  // ← 추가
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
     ...update,
@@ -806,7 +807,12 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
     if (data[`${s}_active_idx`] !== undefined) finalUpdate[`${s}_active_idx`] = data[`${s}_active_idx`]
   })
   const winTeam = checkWin(entries)
-  if (winTeam) { finalUpdate.game_over = true; finalUpdate.winner_team = winTeam; finalUpdate.current_order = [] }
+  if (winTeam) {
+    finalUpdate.game_over      = true
+    finalUpdate.winner_team    = winTeam
+    finalUpdate.current_order  = []
+    finalUpdate.turn_started_at = null  // ← 게임 끝나면 null
+  }
   await roomRef.update(finalUpdate)
   return winTeam
 }
@@ -1211,8 +1217,9 @@ export default async function handler(req, res) {
     ...buildEntryUpdate(entries),
     ...assistUpdate,
     ...syncUpdate,
-    current_order: newOrder,
-    turn_count:    newTurnCount,
+    current_order:   newOrder,
+    turn_count:      newTurnCount,
+    turn_started_at: newOrder.length > 0 ? Date.now() : null,  // ← 추가
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
   }
@@ -1223,7 +1230,10 @@ export default async function handler(req, res) {
 
   const winTeam = checkWin(entries)
   if (winTeam) {
-    update.game_over = true; update.winner_team = winTeam; update.current_order = []
+    update.game_over      = true
+    update.winner_team    = winTeam
+    update.current_order  = []
+    update.turn_started_at = null  // ← 게임 끝나면 null
     await roomRef.update(update)
     return res.status(200).json({ ok: true, winTeam })
   }
