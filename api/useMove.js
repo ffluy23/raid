@@ -87,13 +87,17 @@ function applyRankChanges(r, self, target, moveName, logEntries) {
     if (delta > 0) {
       if (cur >= maxVal) { logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 이미 최대다!`)); return }
       const next = Math.min(maxVal, cur + delta)
-      obj[key] = next; obj[`${key}Turns`] = r.turns ?? 2
+      obj[key] = next
+      // ✅ BUG FIX: 이미 턴이 남아있으면 덮어씌우지 않음 (중첩 방지)
+      if ((obj[`${key}Turns`] ?? 0) <= 0) obj[`${key}Turns`] = r.turns ?? 2
       logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${next - cur} 올라갔다! (${next > 0 ? "+" : ""}${next})`))
     } else if (delta < 0) {
       const minVal = isTarget ? -maxVal : 0
       if (cur <= minVal) { logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 더 이상 내려가지 않는다!`)); return }
       const next = Math.max(minVal, cur + delta)
-      obj[key] = next; obj[`${key}Turns`] = r.turns ?? 2
+      obj[key] = next
+      // ✅ BUG FIX: 이미 턴이 남아있으면 덮어씌우지 않음 (중첩 방지)
+      if ((obj[`${key}Turns`] ?? 0) <= 0) obj[`${key}Turns`] = r.turns ?? 2
       logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${cur - next} 내려갔다! (${next > 0 ? "+" : ""}${next})`))
     }
   }
@@ -1157,8 +1161,6 @@ export default async function handler(req, res) {
           }
 
           // ★ BUG FIX 2: 어시스트 추가 공격은 적 팀에게만 적용
-          //   기존: teamOf(tSlot) 체크 없음 → AoE 시 아군 슬롯도 추가 공격됨
-          //   수정: teamOf(tSlot) !== myTeam 조건 추가
           if (isRequester && assistUsedThisTurn && supporterSlot && teamOf(tSlot) !== myTeam) {
             const supPkmn = entries[supporterSlot]?.[data[`${supporterSlot}_active_idx`] ?? 0]
             if (supPkmn && supPkmn.hp > 0 && tPkmn.hp > 0) {
