@@ -1005,7 +1005,6 @@ function listenRoom() {
       clearTurnTimer()
 
       if (currentTurnSlot && !data.game_over) {
-        // turn_started_at이 없으면 현재 시간을 기준으로 폴백
         const turnStartedAt = data.turn_started_at ?? Date.now()
 
         if (isSpectator) {
@@ -1045,10 +1044,31 @@ function listenRoom() {
           myActivePkmn?.digState?.digging
         )
 
-        // 자동처리 턴이 아닐 때만 타이머 시작 (서버 기준 turn_started_at 사용)
         if (!isAutoTurnNow) {
           const turnStartedAt = data.turn_started_at ?? Date.now()
           startTurnTimer(turnStartedAt, data)
+        }
+      }
+
+      // ── 내 턴 아닐 때도 타이머 표시 ──────────────────────────────
+      if (!isMyTurnNow && currentTurnSlot && !data.game_over) {
+        if (!timerTickInterval) {  // 이미 돌고 있으면 중복 방지
+          clearTurnTimer()
+          const turnStartedAt = data.turn_started_at ?? Date.now()
+          const calcRemaining = () => {
+            const elapsed = Math.floor((Date.now() - turnStartedAt) / 1000)
+            return Math.max(0, TIMER_SECONDS - elapsed)
+          }
+          timerSecondsLeft = calcRemaining()
+          const el = $("turn-timer")
+          if (el) el.style.display = "inline"
+          updateTimerDisplay()
+
+          timerTickInterval = setInterval(() => {
+            timerSecondsLeft = calcRemaining()
+            updateTimerDisplay()
+            if (timerSecondsLeft <= 0) clearTurnTimer()
+          }, 1000)
         }
       }
 
