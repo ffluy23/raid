@@ -1,146 +1,114 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>제니스 아카데미 전원에게</title>
-  <style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    @font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-1Thin.woff') format('woff');
-    font-weight: 100;
-    font-display: swap;
+<style>
+@import url('https://cdn.jsdelivr.net/gh/MonadABXY/mona-font/web/mona.css');
+*{
+  font-family: 'Mona12', sans-serif;
+}
+/* 메인 페이지 */
+.main-page {
+  height: 100vh;
+  background: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-2ExtraLight.woff') format('woff');
-    font-weight: 200;
-    font-display: swap;
+/* 컨테이너 */
+.main-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 20px;
+  text-align: center;
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff') format('woff');
-    font-weight: 300;
-    font-display: swap;
+/* 타이틀 */
+.logo {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 40px;
+  color: #111;
+  letter-spacing: -0.5px;
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-4Regular.woff') format('woff');
-    font-weight: normal;
-    font-display: swap;
+/* 메뉴 */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff') format('woff');
-    font-weight: 500;
-    font-display: swap;
+/* 버튼 */
+.menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: 100%;
+  padding: 16px;
+
+  border: 1px solid #ddd;
+  border-radius: 10px;
+
+  background: #fff;
+  color: #111;
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff') format('woff');
-    font-weight: 600;
-    font-display: swap;
+/* hover */
+.menu-btn:hover {
+  background: #000;
+  color: #fff;
+  border-color: #000;
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-7ExtraBold.woff') format('woff');
-    font-weight: 700;
-    font-display: swap;
+/* active */
+.menu-btn:active {
+  transform: scale(0.98);
 }
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-8Heavy.woff') format('woff');
-    font-weight: 800;
-    font-display: swap;
+/* 모바일 */
+@media (max-width: 480px) {
+  .main-container {
+    padding: 24px 16px;
+  }
+
+  .logo {
+    font-size: 24px;
+    margin-bottom: 30px;
+  }
+
+  .menu-btn {
+    padding: 14px;
+    font-size: 14px;
+  }
 }
+</style>
 
-@font-face {
-    font-family: 'Escoredream';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-9Black.woff') format('woff');
-    font-weight: 900;
-    font-display: swap;
-}
-
-    body {
-      margin: 0;
-      background-color: #e0e0e0;
-      font-family: 'Escoredream', sans-serif;
-
-      /* 화면 정중앙 배치 */
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
-
-    .container {
-      width: 90%;
-      max-width: 600px;
-      background-color: #ffffff;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-
-      /* 텍스트 가운데 정렬 */
-      text-align: center;
-    }
-
-    .title {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 12px;
-    }
-
-    .content {
-      font-size: 15px;
-      line-height: 1.6;
-    }
-
-    @media (max-width: 600px) {
-      .container {
-        padding: 16px;
-      }
-
-      .title {
-        font-size: 18px;
-      }
-
-      .content {
-        font-size: 14px;
-      }
-    }
-  </style>
+<title>배틀룸</title>
 </head>
-<body>
 
-  <div class="container">
-    <div class="title">제니스 아카데미 전원에게</div>
-    <div class="content">
-       안녕하세요.<br><br>
-소넷입니다.<br><br>
+<body class="main-page">
 
-금일 스토리 0차 진행이 마무리되었습니다.<br>
-예상보다 많은 분들이 함께해주셨고, 생각 이상으로 즐겨주신 것 같아 기쁘게 생각합니다.<br><br>
+  <div class="main-container">
 
-배틀 시스템을 직접 제작하며 여러 시행착오가 있었지만,<br> 여러분이 남겨주신 반응과 플레이를 보며 충분히 보람을 느꼈습니다.<br>
+    <div class="logo">DoubleBattle</div>
 
-진심으로 감사드립니다.<br><br>
-
-보다 나은 경험으로 찾아뵐 수 있도록 준비하겠습니다.<br>
-
-그때 다시 뵙겠습니다.<br><br>
-
-방학 잘 보내라~!<br><br>
-— 소넷
+    <div class="menu">
+      <button class="menu-btn" onclick="location.href='pages/doublebattleroom1.html'">
+        더블배틀룸
+      </button>
     </div>
+
   </div>
 
 </body>
