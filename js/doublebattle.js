@@ -9,7 +9,7 @@ import { josa } from "./effecthandler.js"
 
 window.__moves = moves
 
-const API = "https://zenithfrontier.vercel.app/api"
+const API = "https://ffluy231.vercel.app/api"
 
 // ── 효과음 ───────────────────────────────────────
 const SFX_DICE = "https://slippery-copper-mzpmcmc2ra.edgeone.app/soundreality-bicycle-bell-155622.mp3"
