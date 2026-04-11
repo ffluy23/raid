@@ -1062,11 +1062,13 @@ function listenRoom() {
         const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
         const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
         const isAutoTurnNow = !!(
-          myActivePkmn?.bideState        ||
-          myActivePkmn?.rollState?.active ||
-          myActivePkmn?.flyState?.flying  ||
-          myActivePkmn?.digState?.digging
-        )
+  myActivePkmn?.bideState             ||
+  myActivePkmn?.rollState?.active      ||
+  myActivePkmn?.flyState?.flying       ||
+  myActivePkmn?.digState?.digging      ||
+  myActivePkmn?.ghostDiveState?.diving ||
+  myActivePkmn?.hyperBeamState
+)
 
         if (!isAutoTurnNow) {
           const turnStartedAt = data.turn_started_at ?? Date.now()
@@ -1126,7 +1128,7 @@ if (myActivePkmn?.outrageState?.active) {
   }
 }
 
-if (needsAutoMove || needsAutoFly || needsAutoDig || myActivePkmn?.hyperBeamState) {
+if (needsAutoMove || needsAutoFly || needsAutoDig || myActivePkmn?.hyperBeamState || myActivePkmn?.ghostDiveState?.diving) {
   actionDone = true
   _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: [] })
     .catch(e => { console.warn("자동처리 오류:", e.message); actionDone = false })
