@@ -343,4 +343,162 @@ export const moves = {
                       bide: true, targetSelf: true },
   "구멍파기":   { power: 50, type: "땅",   accuracy: 100, alwaysHit: false, effect: null, dig: true },
 
+  // =====================================================================
+// 더블배틀 moves.js 패치
+// 아래 내용을 기존 더블 moves.js에 반영해줘
+//
+// [A] 기존 기술에 플래그만 추가/수정 → 해당 줄 찾아서 교체
+// [B] 새로 추가할 기술 → 해당 타입 섹션에 붙여넣기
+// =====================================================================
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [A] 기존 기술 수정 (해당 줄 찾아서 아래로 교체)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ── aoeEnemy 추가 ──
+
+  "스피드스타": { power: 35, type: "노말", accuracy: 100, alwaysHit: true,  effect: null, aoeEnemy: true },
+  "하이퍼보이스":{ power: 50, type: "노말", accuracy: 100, alwaysHit: false, effect: null, aoeEnemy: true },
+  "울음소리":   { power: 0, type: "노말", accuracy: 100, alwaysHit: true, effect: null,
+                  rank: { targetAtk: -1, turns: 2 }, aoeEnemy: true },
+  "째려보기":   { power: 0, type: "노말", accuracy: 100, alwaysHit: false, effect: null,
+                  rank: { targetDef: -1, turns: 2 }, aoeEnemy: true },
+  "꼬리흔들기": { power: 0, type: "노말", accuracy: 100, alwaysHit: false, effect: null,
+                  rank: { targetDef: -1, turns: 2 }, aoeEnemy: true },
+  "열풍":       { power: 50, type: "불", accuracy: 90, alwaysHit: false, effect: { chance: 0.1, status: "화상" }, aoeEnemy: true },
+  "용해액":     { power: 30, type: "독", accuracy: 100, alwaysHit: false, effect: null,
+                  rank: { chance: 0.1, targetDef: -1, turns: 2 }, aoeEnemy: true },
+  "눈싸라기":   { power: 30, type: "얼음", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "얼음" }, aoeEnemy: true },
+  "실뿜기":     { power: 0,  type: "벌레", accuracy: 95,  alwaysHit: false,
+                  rank: { targetSpd: -2, turns: 3 }, aoeEnemy: true },
+  "회오리":     { power: 30, type: "드래곤", accuracy: 100, alwaysHit: false,
+                  effect: { chance: 0.2, volatile: "풀죽음" }, twister: true, aoeEnemy: true },
+  "바크아웃":   { power: 40, type: "악", accuracy: 95, alwaysHit: false, effect: null,
+                  rank: { targetAtk: -1, turns: 2 }, aoeEnemy: true },
+
+// ── aoe 추가 (자신 포함 전원) ──
+
+  "방전":       { power: 50, type: "전기", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "마비" }, aoe: true },
+  "파도타기":   { power: 40, type: "물",   accuracy: 100, alwaysHit: false, effect: null, aoe: true },
+  "지진":       { power: 50, type: "땅",   accuracy: 100, alwaysHit: false, effect: null, aoe: true },
+  "땅고르기":   { power: 40, type: "땅",   accuracy: 100, alwaysHit: false, effect: null,
+                  rank: { targetSpd: -1, turns: 3 }, aoe: true },
+
+// ── 싱글버전으로 덮어쓰기 + aoeEnemy ──
+
+  "매지컬샤인": { power: 50, type: "페어리", accuracy: 100, alwaysHit: false, effect: null, aoeEnemy: true },
+  "얼어붙은바람":{ power: 40, type: "얼음", accuracy: 95, alwaysHit: false, targetSelf: false, effect: null,
+                   rank: { targetSpd: -1, turns: 3 }, aoeEnemy: true },
+  "에어커터":   { power: 40, type: "비행", accuracy: 95, alwaysHit: false, effect: null, highCrit: true, aoeEnemy: true },
+  "해수스파우팅":{ power: 70, type: "물",  accuracy: 100, alwaysHit: false, effect: null, waterspout: true, aoeEnemy: true },
+  "회복봉인":   { power: 0,  type: "에스퍼", accuracy: 100, alwaysHit: true, effect: null, healBlock: true, targetSelf: false, aoeEnemy: true },
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [B] 새로 추가할 기술 (해당 타입 섹션에 붙여넣기)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // ───── 노말 ─────
+  "파괴광선":   { power: 70, type: "노말", accuracy: 90, alwaysHit: false, effect: null, hyperBeam: true },
+  "소란피기":   { power: 50, type: "노말", accuracy: 100, alwaysHit: false, effect: null,
+                  outrage: { confusion: false, minTurn: 2, maxTurn: 5, powers: [50, 45, 40, 40, 40] } },
+  "더블윙":     { power: 30, type: "비행", accuracy: 90, alwaysHit: false, effect: null,
+                  multiHit: { min: 2, max: 2 } },
+
+  // ───── 불 ─────
+  "불꽃튀기기": { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null },
+  "화염방사":   { power: 50, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
+  "열사의대지": { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "화상" } },
+  "플레어드라이브": { power: 70, type: "불", accuracy: 100, alwaysHit: false, effect: { recoil: 0.33, chance: 0.1, status: "화상" } },
+
+  // ───── 물 ─────
+  "아쿠아링":   { power: 0, type: "물", accuracy: 100, alwaysHit: true, effect: null, aquaRing: true, targetSelf: true },
+
+  // ───── 전기 ─────
+  "번개엄니":   { power: 40, type: "전기", accuracy: 95, alwaysHit: false, effect: { chance: 0.1, status: "마비" } },
+  "잠재댄스":   { power: 50, type: "전기", accuracy: 100, alwaysHit: false, effect: null },
+  "일렉트릭네트":{ power: 40, type: "전기", accuracy: 95, alwaysHit: false, targetSelf: false, effect: null,
+                   rank: { targetSpd: -1, turns: 3 } },
+
+  // ───── 풀 ─────
+  "매지컬리프": { power: 40, type: "풀", accuracy: 100, alwaysHit: true, effect: null },
+  "하바네로엑기스":{ power: 0, type: "풀", accuracy: 100, alwaysHit: true, targetSelf: false, effect: null,
+                    rank: { targetAtk: 2, targetDef: -2, turns: 2 } },
+  "저리가루":   { power: 0, type: "풀", accuracy: 75, alwaysHit: false, targetSelf: false,
+                  effect: { chance: 1, status: "마비" }, poisonPowder: true },
+  "꽃잎댄스":   { power: 60, type: "풀", accuracy: 100, alwaysHit: false, effect: null,
+                  outrage: { confusion: true, minTurn: 2, maxTurn: 3, powers: [60, 45, 30] } },
+  "리프블레이드":{ power: 50, type: "풀", accuracy: 100, alwaysHit: false, effect: null, highCrit: true },
+  "우드혼":     { power: 45, type: "풀", accuracy: 100, alwaysHit: false, effect: { drain: 0.15 } },
+
+  // ───── 격투 ─────
+  "벌크업":     { power: 0, type: "격투", accuracy: 100, alwaysHit: true, effect: null,
+                  rank: { atk: 1, def: 1, turns: 2 } },
+  "드레인펀치": { power: 45, type: "격투", accuracy: 100, alwaysHit: false, effect: { drain: 0.15 } },
+  "바디프레스": { power: 50, type: "격투", accuracy: 100, alwaysHit: false, effect: null, bodyPress: true },
+
+  // ───── 독 ─────
+  "오물폭탄":   { power: 50, type: "독", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "독" } },
+  "오물웨이브": { power: 50, type: "독", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "독" } },
+  "똬리틀기":   { power: 0, type: "독", accuracy: 100, alwaysHit: true, targetSelf: true, effect: null,
+                  rank: { atk: 1, def: 1, spd: 1, turns: 3 } },
+  "베놈쇼크":   { power: 40, type: "독", accuracy: 100, alwaysHit: false, effect: null, venomShock: true },
+
+  // ───── 땅 ─────
+  "머드샷":     { power: 40, type: "땅", accuracy: 95, alwaysHit: false, targetSelf: false, effect: null,
+                  rank: { targetSpd: -1, turns: 3 } },
+
+  // ───── 비행 ─────
+  "브레이브버드":{ power: 70, type: "비행", accuracy: 100, alwaysHit: false, effect: { recoil: 0.33 } },
+
+  // ───── 에스퍼 ─────
+  "리플렉터":   { power: 0, type: "에스퍼", accuracy: 100, alwaysHit: true, effect: null,
+                  lightScreen: true, targetSelf: true },
+  "미래예지":   { power: 70, type: "에스퍼", accuracy: 100, alwaysHit: true, effect: null, futureSight: true },
+
+  // ───── 벌레 ─────
+  "꽃가루경단": { power: 50, type: "벌레", accuracy: 100, alwaysHit: false, effect: null, pollenPuff: true },
+  "유턴":       { power: 40, type: "벌레", accuracy: 100, alwaysHit: false, effect: null, uTurn: true },
+  "시그널빔":   { power: 45, type: "벌레", accuracy: 100, alwaysHit: false,
+                  effect: { chance: 0.1, volatile: "혼란" } },
+  "하드롤러":   { power: 40, type: "벌레", accuracy: 100, alwaysHit: false,
+                  effect: { chance: 0.3, volatile: "풀죽음" } },
+
+  // ───── 고스트 ─────
+  "저주":       { power: 0, type: "고스트", accuracy: 100, alwaysHit: true, effect: null, curse: true, targetSelf: true },
+  "고스트다이브":{ power: 50, type: "고스트", accuracy: 100, alwaysHit: false, effect: null, ghostDive: true },
+
+  // ───── 드래곤 ─────
+  "용의파동":   { power: 50, type: "드래곤", accuracy: 100, alwaysHit: false, effect: null },
+  "역린":       { power: 60, type: "드래곤", accuracy: 100, alwaysHit: false, effect: null,
+                  outrage: { confusion: true, minTurn: 2, maxTurn: 3, powers: [60, 45, 30] } },
+  "용성군":     { power: 60, type: "드래곤", accuracy: 90, alwaysHit: false, effect: null,
+                  rank: { def: -2, turns: 2 } },
+
+  // ───── 악 ─────
+  "사죄의찌르기":{ power: 50, type: "악", accuracy: 100, alwaysHit: true, effect: null },
+  "깨물어부수기":{ power: 50, type: "악", accuracy: 100, alwaysHit: false, effect: null,
+                   rank: { chance: 0.2, targetAtk: -1, turns: 2 } },
+  "지옥찌르기": { power: 50, type: "악", accuracy: 100, alwaysHit: false, effect: null, throatChop: true },
+  "트집":       { power: 0, type: "악", accuracy: 100, alwaysHit: false, effect: null, torment: true, targetSelf: false },
+  "추억의선물": { power: 0, type: "악", accuracy: 100, alwaysHit: true, effect: null, memento: true },
+
+  // ───── 페어리 ─────
+  "달빛":       { power: 0, type: "페어리", accuracy: 100, alwaysHit: true,
+                  effect: { moonlight: true }, targetSelf: true },
+  "매혹의보이스":{ power: 50, type: "페어리", accuracy: 100, alwaysHit: false, effect: null, enchantedVoice: true },
+
+  // ───── 날씨 (싱글버전 구조로 통일) ─────
+  "쾌청":   { power: 0, type: "불",   accuracy: 100, alwaysHit: true, effect: { weather: "쾌청",    weatherTurns: 5 } },
+  "비바라기":   { power: 0, type: "물",   accuracy: 100, alwaysHit: true, effect: { weather: "비",       weatherTurns: 5 } },
+  "모래바람":   { power: 0, type: "바위", accuracy: 100, alwaysHit: true, effect: { weather: "모래바람", weatherTurns: 5 } },
+  "싸라기눈":   { power: 0, type: "얼음", accuracy: 100, alwaysHit: true, effect: { weather: "싸라기눈", weatherTurns: 5 } },
+
+  // ───── 장판 ─────
+  "스텔스록":   { power: 0, type: "바위", accuracy: 100, alwaysHit: true,
+                  effect: null, field: "stealth_rock", targetSelf: false, aoeEnemy: true },
+  "독압정":     { power: 0, type: "독",   accuracy: 100, alwaysHit: true,
+                  effect: null, field: "toxic_spikes", targetSelf: false, aoeEnemy: true },
+
 }

@@ -255,21 +255,39 @@ function triggerAutoAction(data) {
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo.roar || moveInfo.leechSeed || moveInfo.chainBind
     || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder
+    || moveInfo.pollenPuff
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
 
   if (needsTarget) {
-    const enemies = enemySlotsOf(mySlot).filter(s => {
-      const ai = data[`${s}_active_idx`] ?? 0
-      const p  = data[`${s}_entry`]?.[ai]
-      return p && p.hp > 0
-    })
-    const target = enemies.length > 0
-      ? enemies[Math.floor(Math.random() * enemies.length)]
-      : null
-    doUseMove(moveIdx, target ? [target] : [], data)
-  } else {
-    doUseMove(moveIdx, [], data)
+    if (moveInfo.pollenPuff) {
+      // 50% 확률로 아군 회복, 50% 확률로 적군 공격
+      const ally = allyOf(mySlot)
+      const allyPkmn = data[`${ally}_entry`]?.[data[`${ally}_active_idx`] ?? 0]
+      const allyAlive = allyPkmn && allyPkmn.hp > 0
+      const enemies = enemySlotsOf(mySlot).filter(s => {
+        const ai = data[`${s}_active_idx`] ?? 0
+        const p  = data[`${s}_entry`]?.[ai]
+        return p && p.hp > 0
+      })
+      if (allyAlive && (enemies.length === 0 || Math.random() < 0.5)) {
+        doUseMove(moveIdx, [ally], data)
+      } else if (enemies.length > 0) {
+        doUseMove(moveIdx, [enemies[Math.floor(Math.random() * enemies.length)]], data)
+      } else {
+        doUseMove(moveIdx, [], data)
+      }
+    } else {
+      const enemies = enemySlotsOf(mySlot).filter(s => {
+        const ai = data[`${s}_active_idx`] ?? 0
+        const p  = data[`${s}_entry`]?.[ai]
+        return p && p.hp > 0
+      })
+      const target = enemies.length > 0
+        ? enemies[Math.floor(Math.random() * enemies.length)]
+        : null
+      doUseMove(moveIdx, target ? [target] : [], data)
+    }
   }
 }
 
@@ -633,10 +651,10 @@ function onMoveClick(idx, moveInfo, data) {
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
     || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
+    || moveInfo?.pollenPuff
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
     || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
-
-  const targetsAlly = moveInfo?.healPulse
+  const targetsAlly = moveInfo?.healPulse || moveInfo?.pollenPuff
 
   if (targetsEnemy || targetsAlly) {
     enterTargetMode(idx, data, { targetsEnemy: !!targetsEnemy, targetsAlly: !!targetsAlly })

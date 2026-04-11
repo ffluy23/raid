@@ -475,7 +475,7 @@ if (moveInfo.effect?.moonlight) {
     const tIdx  = data[`${tSlot}_active_idx`] ?? 0
     const tPkmn = entries[tSlot][tIdx]
     if (!tPkmn || tPkmn.hp <= 0) return { handled: true }
-    const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.12))
+    const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.22))
     tPkmn.hp   = Math.min(tPkmn.maxHp ?? tPkmn.hp, tPkmn.hp + heal)
     logEntries.push(makeLog("hp", `${tPkmn.name}${josa(tPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
     return { handled: true }
@@ -925,6 +925,20 @@ if (moveInfo.enchantedVoice) {
   }
   return { handled: true, damage }
 }
+
+if (moveInfo.pollenPuff) {
+    const isFriendly = teamOf(mySlot) === teamOf(tSlot)
+    if (isFriendly) {
+      const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.22))
+      tPkmn.hp   = Math.min(tPkmn.maxHp ?? tPkmn.hp, tPkmn.hp + heal)
+      logEntries.push(makeLog("hp",
+        `${tPkmn.name}${josa(tPkmn.name, "은는")} 꽃가루를 받아 HP를 회복했다! (+${heal})`,
+        { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }
+      ))
+      return { handled: true, damage: 0 }
+    }
+    return { handled: false, damage: 0 }
+  }
 
   // 고속스핀 rapidSpin (싱글 포팅) — 씨뿌리기 해제 + 랭크업
   if (moveInfo.rapidSpin) {
