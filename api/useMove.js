@@ -291,7 +291,7 @@ function handleSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, entr
     if (isGhost) {
       const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) / 3))
       myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
-      logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 절반 깎았다! (-${selfDmg})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+      logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 깎았다! (-${selfDmg})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
       if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
       if (tSlots.length > 0) {
         const tSlot = tSlots[0]
@@ -374,14 +374,15 @@ function handleSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, entr
   }
 
   if (moveInfo.futureSight) {
-    if (myPkmn.futureSight) {
-      logEntries.push(makeLog("normal", `이미 미래예지가 걸려있다!`))
-    } else {
-      myPkmn.futureSight = { turnsLeft: 2, attackerName: myPkmn.name, power: 70 }
-      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 미래를 예지했다!`))
-    }
-    return { handled: true }
+  if (myPkmn.futureSight) {
+    logEntries.push(makeLog("normal", `이미 미래예지가 걸려있다!`))
+  } else {
+    const targetSlot = tSlots[0] ?? null
+    myPkmn.futureSight = { turnsLeft: 2, attackerName: myPkmn.name, power: 70, targetSlot }
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 미래를 예지했다!`))
   }
+  return { handled: true }
+}
 
   if (moveInfo.effect?.moonlight) {
     const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.22))
@@ -483,22 +484,6 @@ function handleSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, entr
     return { handled: true }
   }
 
-  if (moveInfo.fly && !myPkmn.flyState?.flying) {
-    myPkmn.flyState       = { flying: true }
-    myPkmn.flyMoveName    = moveInfo._name ?? "공중날기"
-    myPkmn._flyTargetSlot = tSlots?.[0] ?? null
-    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 하늘 높이 날아올랐다!`))
-    return { handled: true }
-  }
-
-  if (moveInfo.dig && !myPkmn.digState?.digging) {
-    myPkmn.digState       = { digging: true }
-    myPkmn.digMoveName    = moveInfo._name ?? "구멍파기"
-    myPkmn._digTargetSlot = tSlots?.[0] ?? null
-    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 땅속으로 파고들었다!`))
-    return { handled: true }
-  }
-
   if (moveInfo.chainBind) {
     if (tSlots.length === 0) return { handled: true }
     const tSlot = tSlots[0]
@@ -551,6 +536,23 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
     if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
     if (pkmn.hp <= 0)   logEntries.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot }))
   }
+
+  // handleSpecialAttack 안에 고스트다이브 바로 위에 추가
+if (moveInfo.fly && !myPkmn.flyState?.flying) {
+  myPkmn.flyState       = { flying: true }
+  myPkmn.flyMoveName    = moveInfo._name ?? "공중날기"
+  myPkmn._flyTargetSlot = tSlot
+  logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 하늘 높이 날아올랐다!`))
+  return { handled: true, damage: 0 }
+}
+
+if (moveInfo.dig && !myPkmn.digState?.digging) {
+  myPkmn.digState       = { digging: true }
+  myPkmn.digMoveName    = moveInfo._name ?? "구멍파기"
+  myPkmn._digTargetSlot = tSlot
+  logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 땅속으로 파고들었다!`))
+  return { handled: true, damage: 0 }
+}
 
   // ── 고스트다이브 1턴째 (power 있으므로 여기서 처리) ──────────────
   if (moveInfo.ghostDive && !myPkmn.ghostDiveState?.diving) {
@@ -976,6 +978,7 @@ async function applyLeechSeedEot(entries, data, logEntries) {
 }
 
 // ── 공중날기/구멍파기/고스트다이브 2턴째 공통 처리 ──────────────
+
 function handleTwoTurnAttack(myPkmn, mySlot, targetSlot, entries, data, logEntries, opts = {}) {
   const { moveName, accuracy } = opts
   const tIdx  = data[`${targetSlot}_active_idx`] ?? 0
@@ -1074,6 +1077,10 @@ export default async function handler(req, res) {
   // ── 트집 서버 체크 ────────────────────────────────────────────
   if (myPkmn.tormented && moveData.name === myPkmn.lastUsedMove)
     return res.status(403).json({ error: "트집으로 사용 불가" })
+
+  const soundMoves = ["금속음","돌림노래","바크아웃","소란피기","싫은소리","울부짖기","울음소리","차밍보이스","비밀이야기","하이퍼보이스","매혹의보이스"]
+if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
+  return res.status(403).json({ error: "지옥찌르기로 사용 불가" })
 
   const myTeam    = teamOf(mySlot)
   const assistKey = `assist_team${myTeam}`
