@@ -1102,6 +1102,8 @@ export default async function handler(req, res) {
   let assistUsedThisTurn = false
   const activatedSyncKeys = new Set()
   const logEntries = []
+  const assistUpdate = {}   // ← 추가
+const syncUpdate = {}
 
   // ── tickVolatiles: EOT 아닌 매 행동 전에 각 슬롯 처리 ─────────
   {
