@@ -193,7 +193,7 @@ export function tickVolatiles(pokemon) {
 }
 
 // ── EOT 독/화상/아쿠아링/저주/미래예지/회복봉인/목조르기 ──────────
-export function applyEndOfTurnDamage(entries, allEntries) {
+export function applyEndOfTurnDamage(entries, data) {
   const msgs = []
   let anyFainted = false
 
