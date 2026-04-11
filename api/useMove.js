@@ -1470,6 +1470,10 @@ export default async function handler(req, res) {
     }
 
 
+   if (moveInfo?.hyperBeam) {
+      myPkmn.hyperBeamState = true
+    }
+
     clearRankStack(myPkmn)
     if ((myPkmn.defendTurns ?? 0) > 0) {
       myPkmn.defendTurns--
@@ -1570,10 +1574,6 @@ export default async function handler(req, res) {
     }
     const win = await handleEot(db, roomId, entries, data, update)
     if (win) { await roomRef.update(update); return res.status(200).json({ ok: true, winTeam: win }) }
-  }
-
-  if (moveInfo?.hyperBeam) {
-    myPkmn.hyperBeamState = true
   }
 
   await roomRef.update(update)
