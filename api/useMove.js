@@ -545,6 +545,20 @@ if (moveInfo.effect?.moonlight) {
     return { handled: true }
   }
 
+   if (moveInfo.field) {
+    const enemyTeam = teamOf(mySlot) === "A" ? "B" : "A"
+    const fieldKey  = `field_${enemyTeam}_${moveInfo.field}`
+    const current   = data[fieldKey] ?? 0
+    const max       = moveInfo.field === "toxic_spikes" ? 2 : 1
+    if (current >= max) {
+      logEntries.push(makeLog("normal", `이미 ${moveName}이(가) 깔려있다!`))
+    } else {
+      data[fieldKey] = current + 1
+      logEntries.push(makeLog("normal", `${enemyTeam === "A" ? "A팀" : "B팀"}의 발밑에 ${moveName}을(를) 깔았다!`))
+    }
+    return { handled: true }
+  }
+
   return { handled: false }
 }
 
@@ -1052,6 +1066,14 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
   ALL_FS.forEach(s => {
     if (data[`${s}_active_idx`] !== undefined) finalUpdate[`${s}_active_idx`] = data[`${s}_active_idx`]
   })
+
+  ;["A","B"].forEach(team => {
+    ;["stealth_rock","toxic_spikes"].forEach(f => {
+      const k = `field_${team}_${f}`
+      if (data[k] !== undefined) finalUpdate[k] = data[k]
+    })
+  })
+
   const winTeam = checkWin(entries)
   if (winTeam) {
     finalUpdate.game_over      = true
@@ -1474,16 +1496,22 @@ const syncUpdate = {}
         myPkmn.hyperBeamState = true
       }
 
-      if (moveInfo?.uTurn) {
+     if (moveInfo?.uTurn) {
         const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
         const uTurnTarget = tSlots[0]
         const uTurnPkmn   = uTurnTarget ? entries[uTurnTarget]?.[data[`${uTurnTarget}_active_idx`] ?? 0] : null
         if (canSwitch && uTurnPkmn && uTurnPkmn.hp > 0) {
           const { assistEventTs: utAts, syncEventTs: utSts } = await writeLogs(roomId, logEntries)
+          const fieldUpdate = {}
+          ;["A","B"].forEach(team => {
+            ;["stealth_rock","toxic_spikes"].forEach(f => {
+              const k = `field_${team}_${f}`
+              if (data[k] !== undefined) fieldUpdate[k] = data[k]
+            })
+          })
           await roomRef.update({
             ...buildEntryUpdate(entries),
-            ...assistUpdate,
-            ...syncUpdate,
+            ...fieldUpdate,
             current_order:   (data.current_order ?? []).slice(1),
             turn_count:      (data.turn_count ?? 1) + 1,
             turn_started_at: Date.now(),
@@ -1550,6 +1578,14 @@ const syncUpdate = {}
   ALL_FS.forEach(s => {
     if (data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`]
   })
+
+  ;["A","B"].forEach(team => {
+    ;["stealth_rock","toxic_spikes"].forEach(f => {
+      const k = `field_${team}_${f}`
+      if (data[k] !== undefined) update[k] = data[k]
+    })
+  })
+
 
   const winTeam = checkWin(entries)
   if (winTeam) {

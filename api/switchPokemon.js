@@ -1,8 +1,8 @@
 import { db } from "../lib/firestore.js"
-import { josa } from "../lib/effecthandler.js"
+import { josa, applyStatus } from "../lib/effecthandler.js"
 import {
   deepCopyEntries, buildEntryUpdate, roomName,
-  writeLogs, handleEot, corsHeaders
+  writeLogs, handleEot, corsHeaders, teamOf
 } from "../lib/gameUtils.js"
 
 function defaultRanks() {
@@ -18,6 +18,36 @@ function resetOnSwitch(pkmn) {
   pkmn.seeded      = false
   pkmn.defending   = false
   pkmn.defendTurns = 0
+}
+
+// 문자열 배열로 반환 (writeLogs가 string[] 기대)
+function applyEntryHazards(slot, entries, data) {
+  const logs      = []
+  const team      = teamOf(slot)
+  const activeIdx = data[`${slot}_active_idx`] ?? 0
+  const pkmn      = entries[slot][activeIdx]
+  if (!pkmn || pkmn.hp <= 0) return logs
+
+  // 스텔스록
+  const srKey = `field_${team}_stealth_rock`
+  if ((data[srKey] ?? 0) > 0) {
+    const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.125))
+    pkmn.hp = Math.max(0, pkmn.hp - dmg)
+    logs.push(`스텔스록이 ${pkmn.name}${josa(pkmn.name, "을를")} 공격했다! (-${dmg})`)
+    if (pkmn.hp <= 0) logs.push(`${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`)
+  }
+
+  // 독압정
+  const tsKey = `field_${team}_toxic_spikes`
+  const tsVal = data[tsKey] ?? 0
+  if (tsVal > 0 && pkmn.hp > 0 && !pkmn.status) {
+    const pkmnTypes = Array.isArray(pkmn.type) ? pkmn.type : [pkmn.type]
+    if (!pkmnTypes.includes("비행") && !pkmnTypes.includes("강철") && !pkmnTypes.includes("독")) {
+      applyStatus(pkmn, "독").forEach(m => logs.push(m))
+    }
+  }
+
+  return logs
 }
 
 export default async function handler(req, res) {
@@ -40,11 +70,8 @@ export default async function handler(req, res) {
   const prevPkmn  = entries[mySlot][activeIdx]
   const nextPkmn  = entries[mySlot][newIdx]
 
-  // 기절 상태인지 체크
   const isFainted = !prevPkmn || prevPkmn.hp <= 0
 
-  // 기절 교체: 턴 체크 없이 허용
-  // 일반 교체: 내 턴이어야 함
   if (!isFainted && order[0] !== mySlot)
     return res.status(403).json({ error: "내 턴이 아님" })
 
@@ -58,12 +85,17 @@ export default async function handler(req, res) {
   resetOnSwitch(prevPkmn)
   nextPkmn.seeded = false
 
+  // 장판 발동 — active_idx를 newIdx로 미리 반영해야 올바른 포켓몬에 적용됨
+  data[`${mySlot}_active_idx`] = newIdx
+  const hazardLogs = applyEntryHazards(mySlot, entries, data)
+
   const logs = [
     `돌아와, ${prev}!`,
-    `${myName}${josa(myName, "은는")} ${next}${josa(next, "을를")} 내보냈다!`
+    `${myName}${josa(myName, "은는")} ${next}${josa(next, "을를")} 내보냈다!`,
+    ...hazardLogs
   ]
 
-  // 기절 교체는 턴을 소모하지 않음
+  // 기절 교체: 턴 소모 없음
   if (isFainted) {
     await writeLogs(db, roomId, logs)
     await roomRef.update({
@@ -73,7 +105,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true })
   }
 
-  // 일반 교체는 기존대로 턴 소모
+  // 일반 교체: 턴 소모
   const newOrder     = order.slice(1)
   const newTurnCount = (data.turn_count ?? 1) + 1
   const isEot        = newOrder.length === 0
@@ -83,7 +115,7 @@ export default async function handler(req, res) {
     [`${mySlot}_active_idx`]: newIdx,
     current_order:     newOrder,
     turn_count:        newTurnCount,
-    turn_started_at:   newOrder.length > 0 ? Date.now() : null,  // ← 추가
+    turn_started_at:   newOrder.length > 0 ? Date.now() : null,
     hit_event:         null,
     dice_event:        null,
     attack_dice_event: null
