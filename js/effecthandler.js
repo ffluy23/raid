@@ -199,7 +199,8 @@ export function applyEndOfTurnDamage(entries, allEntries) {
 
   // entries: 각 슬롯의 entry 배열 배열 [[p1entries],[p2entries],...]
   // allEntries는 futureSight 공격 대상 탐색용 (flat)
-  const flat = entries.flat()
+  const ALL_SLOTS = ["p1", "p2", "p3", "p4"]
+
 
   for (const entry of entries) {
     for (const pkmn of entry) {
@@ -222,21 +223,25 @@ export function applyEndOfTurnDamage(entries, allEntries) {
 
       // 미래예지 카운트다운
       if (pkmn.futureSight) {
-        pkmn.futureSight.turnsLeft--
-        if (pkmn.futureSight.turnsLeft <= 0) {
-          const power    = pkmn.futureSight.power ?? 70
-          const atkName  = pkmn.futureSight.attackerName ?? "미래예지"
-          // 가장 HP 낮은 살아있는 적 타겟 (간단 처리)
-          const target = flat.find(t => t !== pkmn && t.hp > 0)
-          if (target) {
-            const dmg = Math.max(1, power)
-            target.hp = Math.max(0, target.hp - dmg)
-            msgs.push(`${atkName}의 미래예지가 ${target.name}${josa(target.name, "을를")} 공격했다! (${dmg} 데미지)`)
-            if (target.hp <= 0) { msgs.push(`${target.name}${josa(target.name, "은는")} 쓰러졌다!`); anyFainted = true }
-          }
-          pkmn.futureSight = null
-        }
-      }
+  pkmn.futureSight.turnsLeft--
+  if (pkmn.futureSight.turnsLeft <= 0) {
+    const power      = pkmn.futureSight.power ?? 70
+    const atkName    = pkmn.futureSight.attackerName ?? "미래예지"
+    const targetSlot = pkmn.futureSight.targetSlot ?? null
+    pkmn.futureSight = null
+    const entryIdx   = ALL_SLOTS.indexOf(targetSlot)
+const activeIdx  = data?.[`${targetSlot}_active_idx`] ?? 0
+const realTarget = entryIdx !== -1 ? entries[entryIdx]?.[activeIdx] : null
+    if (!realTarget) {
+      msgs.push(`${atkName}의 미래예지가 실패했다!`)
+    } else {
+      const dmg = Math.max(1, power)
+      realTarget.hp = Math.max(0, realTarget.hp - dmg)
+      msgs.push(`${atkName}의 미래예지가 ${realTarget.name}${josa(realTarget.name, "을를")} 공격했다! (${dmg} 데미지)`)
+      if (realTarget.hp <= 0) { msgs.push(`${realTarget.name}${josa(realTarget.name, "은는")} 쓰러졌다!`); anyFainted = true }
+    }
+  }
+}
 
       // 회복봉인 턴 감소
       if ((pkmn.healBlocked ?? 0) > 0) {
