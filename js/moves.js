@@ -196,7 +196,6 @@ export const moves = {
   "사이코쇼크":     { power: 50, type: "에스퍼", accuracy: 100, alwaysHit: false, effect: null },
   "염동력":         { power: 40, type: "에스퍼", accuracy: 100, alwaysHit: false,
                       effect: { chance: 0.1, volatile: "혼란" } },
-  "미래예지":       { power: 40, type: "에스퍼", accuracy: 100, alwaysHit: false, effect: null },
   "사념의박치기":   { power: 50, type: "에스퍼", accuracy: 100, alwaysHit: false,
                       effect: { chance: 0.2, volatile: "풀죽음" } },
   // 빛의 장막: lightScreen 플래그
@@ -455,7 +454,7 @@ export const moves = {
   // ───── 에스퍼 ─────
   "리플렉터":   { power: 0, type: "에스퍼", accuracy: 100, alwaysHit: true, effect: null,
                   lightScreen: true, targetSelf: true },
-  "미래예지":   { power: 70, type: "에스퍼", accuracy: 100, alwaysHit: true, effect: null, futureSight: true },
+  "미래예지":   { power: 0, type: "에스퍼", accuracy: 100, alwaysHit: true, effect: null, futureSight: true },
 
   // ───── 벌레 ─────
   "꽃가루경단": { power: 50, type: "벌레", accuracy: 100, alwaysHit: false, effect: null, pollenPuff: true },
