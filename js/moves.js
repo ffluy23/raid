@@ -466,7 +466,7 @@ export const moves = {
                   effect: { chance: 0.3, volatile: "풀죽음" } },
 
   // ───── 고스트 ─────
-  "저주":       { power: 0, type: "고스트", accuracy: 100, alwaysHit: true, effect: null, curse: true, targetSelf: true },
+ "저주": { power: 0, type: "고스트", accuracy: 100, alwaysHit: true, effect: null, curse: true },
   "고스트다이브":{ power: 50, type: "고스트", accuracy: 100, alwaysHit: false, effect: null, ghostDive: true },
 
   // ───── 드래곤 ─────

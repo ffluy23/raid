@@ -255,7 +255,7 @@ function triggerAutoAction(data) {
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo.roar || moveInfo.leechSeed || moveInfo.chainBind
     || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder
-    || moveInfo.pollenPuff
+    || moveInfo.pollenPuff || moveInfo.curse
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
 
@@ -651,7 +651,7 @@ function onMoveClick(idx, moveInfo, data) {
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
     || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
-    || moveInfo?.pollenPuff
+    || moveInfo?.pollenPuff || moveInfo?.curse
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
     || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
   const targetsAlly = moveInfo?.healPulse || moveInfo?.pollenPuff
