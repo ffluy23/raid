@@ -515,6 +515,7 @@ if (moveInfo.effect?.moonlight) {
   if (moveInfo.fly && !myPkmn.flyState?.flying) {
     myPkmn.flyState   = { flying: true }
     myPkmn.flyMoveName = moveInfo._name ?? "공중날기"
+    myPkmn._flyTargetSlot  = tSlots?.[0] ?? null
     logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 하늘 높이 날아올랐다!`))
     return { handled: true }
   }
@@ -523,6 +524,7 @@ if (moveInfo.effect?.moonlight) {
   if (moveInfo.dig && !myPkmn.digState?.digging) {
     myPkmn.digState   = { digging: true }
     myPkmn.digMoveName = moveInfo._name ?? "구멍파기"
+    myPkmn._digTargetSlot  = tSlots?.[0] ?? null
     logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 땅속으로 파고들었다!`))
     return { handled: true }
   }
