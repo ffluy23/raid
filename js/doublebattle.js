@@ -686,6 +686,7 @@ function updateBenchButtons(data) {
 }
 
 async function doSwitchPokemon(newIdx, data, forceSwitch = false) {
+  console.log("doSwitchPokemon", { newIdx, forceSwitch, actionDone })
   const myEntry      = data[`${mySlot}_entry`] ?? []
   const activeIdx    = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = myEntry[activeIdx]
