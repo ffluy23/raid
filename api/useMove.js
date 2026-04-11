@@ -545,6 +545,15 @@ if (moveInfo.effect?.moonlight) {
     return { handled: true }
   }
 
+  // 고스트다이브 1턴째
+  if (moveInfo.ghostDive && !myPkmn.ghostDiveState?.diving) {
+    myPkmn.ghostDiveState    = { diving: true }
+    myPkmn.ghostDiveMoveName = moveInfo._name ?? "고스트다이브"
+    myPkmn._ghostDiveTargetSlot = tSlots?.[0] ?? null 
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 어둠 속으로 사라졌다!`))
+    return { handled: true }
+  }
+
    if (moveInfo.field) {
     const enemyTeam = teamOf(mySlot) === "A" ? "B" : "A"
     const fieldKey  = `field_${enemyTeam}_${moveInfo.field}`
