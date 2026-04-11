@@ -1463,56 +1463,54 @@ export default async function handler(req, res) {
             }
           }
 
-          tPkmn.lastReceivedDamage = mainDmg
+         tPkmn.lastReceivedDamage = mainDmg
           if (tPkmn.bideState) { tPkmn.bideState.damage = (tPkmn.bideState.damage ?? 0) + mainDmg; tPkmn.bideState.lastAttackerSlot = mySlot }
         }
       }
-    }
 
+      if (moveInfo?.hyperBeam) {
+        myPkmn.hyperBeamState = true
+      }
 
-   if (moveInfo?.hyperBeam) {
-      myPkmn.hyperBeamState = true
-    }
+      if (moveInfo?.uTurn) {
+        const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
+        const uTurnTarget = tSlots[0]
+        const uTurnPkmn   = uTurnTarget ? entries[uTurnTarget]?.[data[`${uTurnTarget}_active_idx`] ?? 0] : null
+        if (canSwitch && uTurnPkmn && uTurnPkmn.hp > 0) {
+          const { assistEventTs: utAts, syncEventTs: utSts } = await writeLogs(roomId, logEntries)
+          await roomRef.update({
+            ...buildEntryUpdate(entries),
+            ...assistUpdate,
+            ...syncUpdate,
+            current_order:   (data.current_order ?? []).slice(1),
+            turn_count:      (data.turn_count ?? 1) + 1,
+            turn_started_at: Date.now(),
+            [`force_switch_${mySlot}`]: true,
+            ...(utAts !== null ? { assist_event: { ts: utAts } } : {}),
+            ...(utSts !== null ? { sync_event:   { ts: utSts } } : {}),
+          })
+          return res.status(200).json({ ok: true })
+        }
+      }
+
+    }  // if (!conf.selfHit) 끝
 
     clearRankStack(myPkmn)
     if ((myPkmn.defendTurns ?? 0) > 0) {
       myPkmn.defendTurns--
       if (myPkmn.defendTurns <= 0) { myPkmn.defending = false; myPkmn.defendTurns = 0 }
     }
-  }
+  }  // if (!pre.blocked) 끝
 
-  const assistUpdate = {}
   if (isRequester) {
     assistUpdate[assistKey]               = null
     assistUpdate[`assist_used_${myTeam}`] = true
     if (!assistUsedThisTurn) logEntries.push(makeLog("normal", "어시스트 효과가 사라졌다..."))
   }
-  const syncUpdate = {}
   activatedSyncKeys.forEach(k => {
     const team = k.replace("sync_team", "")
     syncUpdate[k] = null; syncUpdate[`sync_used_${team}`] = true
   })
-
-   if (moveInfo?.uTurn) {
-  const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
-  const tSlot     = tSlots[0]
-  const tPkmn     = tSlot ? entries[tSlot]?.[data[`${tSlot}_active_idx`] ?? 0] : null
-  if (canSwitch && tPkmn && tPkmn.hp > 0) {
-    const { assistEventTs, syncEventTs } = await writeLogs(roomId, logEntries)
-    await roomRef.update({
-      ...buildEntryUpdate(entries),
-      ...assistUpdate,
-      ...syncUpdate,
-      current_order:   (data.current_order ?? []).slice(1),
-      turn_count:      (data.turn_count ?? 1) + 1,
-      turn_started_at: Date.now(),
-      [`force_switch_${mySlot}`]: true,
-      ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
-      ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
-    })
-    return res.status(200).json({ ok: true })
-  }
-}
 
   const newOrder     = (data.current_order ?? []).slice(1)
   const newTurnCount = (data.turn_count ?? 1) + 1
