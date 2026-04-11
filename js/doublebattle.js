@@ -690,7 +690,7 @@ async function doSwitchPokemon(newIdx, data) {
   const activeIdx    = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = myEntry[activeIdx]
   const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
-  if (!isFainted && actionDone) return
+  if (!isFainted && !forceSwitch && actionDone) return
   clearTurnTimer()
   if (!isFainted) actionDone = true
   const bench = $("bench-container")
