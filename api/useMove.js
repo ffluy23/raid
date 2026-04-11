@@ -1445,37 +1445,35 @@ export default async function handler(req, res) {
       }
 
       // ── 유턴: 공격 후 강제 교체
-      if (moveInfo?.uTurn) {
-        const canSwitch   = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
-        const uTurnTarget = tSlots[0]
-        const uTurnPkmn   = uTurnTarget ? entries[uTurnTarget]?.[data[`${uTurnTarget}_active_idx`] ?? 0] : null
-        if (canSwitch) {
-          const { assistEventTs: utAts, syncEventTs: utSts } = await writeLogs(roomId, logEntries)
-          const fieldUpdate = {}
-          ;["A","B"].forEach(team => {
-            ;["stealth_rock","toxic_spikes"].forEach(f => {
-              const k = `field_${team}_${f}`
-              if (data[k] !== undefined) fieldUpdate[k] = data[k]
-            })
-          })
-          await roomRef.update({
-            ...buildEntryUpdate(entries),
-            ...assistUpdate,
-            ...syncUpdate,
-            ...fieldUpdate,
-            current_order:   [mySlot, ...(data.current_order ?? []).slice(1)],
-  // 그대로 유지
-turn_count:      data.turn_count ?? 1,      // 턴 카운트도 아직 안 올림
-turn_started_at: data.turn_started_at, 
-            [`force_switch_${mySlot}`]: true,
-            ...(utAts !== null ? { assist_event: { ts: utAts } } : {}),
-            ...(utSts !== null ? { sync_event:   { ts: utSts } } : {}),
-          })
-          return res.status(200).json({ ok: true })
-        }
-      }
+     if (moveInfo?.uTurn) {
+  const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
+  const didHit    = logEntries.some(e => e.type === "hit")
+  if (canSwitch && didHit) {
+    const { assistEventTs: utAts, syncEventTs: utSts } = await writeLogs(roomId, logEntries)
+    const fieldUpdate = {}
+    ;["A","B"].forEach(team => {
+      ;["stealth_rock","toxic_spikes"].forEach(f => {
+        const k = `field_${team}_${f}`
+        if (data[k] !== undefined) fieldUpdate[k] = data[k]
+      })
+    })
+    await roomRef.update({
+      ...buildEntryUpdate(entries),
+      ...assistUpdate,
+      ...syncUpdate,
+      ...fieldUpdate,
+      current_order:   [mySlot, ...(data.current_order ?? []).slice(1)],
+      turn_count:      data.turn_count ?? 1,
+      turn_started_at: data.turn_started_at,
+      [`force_switch_${mySlot}`]: true,
+      ...(utAts !== null ? { assist_event: { ts: utAts } } : {}),
+      ...(utSts !== null ? { sync_event:   { ts: utSts } } : {}),
+    })
+    return res.status(200).json({ ok: true })
+  }
+}
 
-    }  // if (!conf.selfHit) 끝
+}  // if (!conf.selfHit) 끝
 
     clearRankStack(myPkmn)
     if ((myPkmn.defendTurns ?? 0) > 0) {
