@@ -16,8 +16,16 @@ function resetOnSwitch(pkmn) {
   pkmn.rollState   = { active: false, turn: 0 }
   pkmn.bideState   = null
   pkmn.seeded      = false
-  pkmn.defending   = false
-  pkmn.defendTurns = 0
+  pkmn.defending     = false
+  pkmn.defendTurns   = 0
+  pkmn.aquaRing      = false
+  pkmn.cursed        = false
+  pkmn.futureSight   = null
+  pkmn.healBlocked   = 0
+  pkmn.throatChopped = 0
+  pkmn.tormented     = false
+  pkmn.outrageState  = null
+  pkmn.hyperBeamState = false
 }
 
 // 문자열 배열로 반환 (writeLogs가 string[] 기대)
