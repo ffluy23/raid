@@ -183,10 +183,10 @@ function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = 
   // 빛의 장막 감소 (breakBarrier 기술은 무시)
   const screenMult      = (def.lightScreenTurns ?? 0) > 0 && !move.breakBarrier ? 0.75 : 1.0
   // 공중날기 중 전기: 1.2배 / twister: 1.2배
-  const flyElecMult     = (def.flyState?.flying && move.type === "전기") ? 1.2 : 1.0
+  const flyElecMult     = (def.flyState?.flying && move.type === "번개") ? 1.2 : 1.0
   const twisterFlyMult  = (move.twister && def.flyState?.flying) ? 1.2 : 1.0
   // 구멍파기 중 땅: 1.2배
-  const digEarthMult    = (def.digState?.digging && move.type === "땅") ? 1.2 : 1.0
+  const digEarthMult    = (def.digState?.digging && move.type === "지진") ? 1.2 : 1.0
 
   const critRate = Math.min(100, atkStat * 2 + (move.highCrit ? 3 : 0))
   const critical = Math.random() * 100 < critRate
