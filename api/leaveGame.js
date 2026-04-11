@@ -51,7 +51,15 @@ export default async function handler(req, res) {
     intro_ready_p2: false,
     intro_ready_p3: false,
     intro_ready_p4: false,
-    background: null
+   background: null,
+    field_A_stealth_rock: 0,
+    field_B_stealth_rock: 0,
+    field_A_toxic_spikes: 0,
+    field_B_toxic_spikes: 0,
+    force_switch_p1: false,
+    force_switch_p2: false,
+    force_switch_p3: false,
+    force_switch_p4: false,
   })
 
   return res.status(200).json({ ok: true })
