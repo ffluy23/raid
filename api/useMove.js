@@ -1548,6 +1548,41 @@ export default async function handler(req, res) {
   if (isEot) {
     const eotLogEntries = []
     await applyLeechSeedEot(entries, data, eotLogEntries)
+
+    // 아쿠아링/저주/회복봉인/목조르기 직접 처리
+    ALL_FS.forEach(s => {
+      const idx  = data[`${s}_active_idx`] ?? 0
+      const pkmn = entries[s][idx]
+      if (!pkmn || pkmn.hp <= 0) return
+
+      if (pkmn.aquaRing) {
+        const heal = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.0625))
+        pkmn.hp = Math.min(pkmn.maxHp ?? pkmn.hp, pkmn.hp + heal)
+        eotLogEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 아쿠아링으로 HP를 회복했다! (+${heal})`))
+        eotLogEntries.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
+      }
+
+      if (pkmn.cursed && pkmn.hp > 0) {
+        const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.25))
+        pkmn.hp = Math.max(0, pkmn.hp - dmg)
+        eotLogEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 저주 때문에 ${dmg} 데미지를 입었다!`))
+        eotLogEntries.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
+        if (pkmn.hp <= 0) eotLogEntries.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
+      }
+
+      if ((pkmn.healBlocked ?? 0) > 0) {
+        pkmn.healBlocked--
+        if (!pkmn.healBlocked)
+          eotLogEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 회복봉인이 풀렸다!`))
+      }
+
+      if ((pkmn.throatChopped ?? 0) > 0) {
+        pkmn.throatChopped--
+        if (!pkmn.throatChopped)
+          eotLogEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 다시 소리를 낼 수 있게 됐다!`))
+      }
+    })
+
     if (eotLogEntries.length > 0) {
       Object.assign(update, buildEntryUpdate(entries))
       const logsRef = db.collection("double").doc(roomId).collection("logs")
@@ -1559,7 +1594,4 @@ export default async function handler(req, res) {
     const win = await handleEot(db, roomId, entries, data, update)
     if (win) { await roomRef.update(update); return res.status(200).json({ ok: true, winTeam: win }) }
   }
-
-  await roomRef.update(update)
-  return res.status(200).json({ ok: true })
 }
