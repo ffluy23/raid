@@ -611,7 +611,11 @@ function updateMoveButtons(data) {
     btn.style.boxShadow  = `inset 0 0 0 2px white, 0 0 0 2px ${color}`
 
     const lockedByTorment = !!(myPokemon?.tormented && mv.name === myPokemon?.lastUsedMove)
+    const soundMoves = ["금속음","돌림노래","바크아웃","소란피기","싫은소리","울부짖기","울음소리","차밍보이스","비밀이야기","하이퍼보이스","매혹의보이스"]
+const lockedByThroatChop = !!((myPokemon?.throatChopped ?? 0) > 0 && soundMoves.includes(mv.name))
+const lockedByOutrage    = !!(myPokemon?.outrageState?.active)
 const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone && !isChainBlocked && !lockedByTorment
+  && !lockedByThroatChop && !lockedByOutrage && !myPokemon?.ghostDiveState?.diving
     btn.disabled = !canUse
     btn.onclick  = canUse ? () => { playSound(SFX_BTN); onMoveClick(i, moveInfo, data) } : null
   }
@@ -1108,6 +1112,18 @@ if (data[`force_switch_${mySlot}`] && myActivePkmn && myActivePkmn.hp > 0) {
   actionDone = false
   applyRoomData(data)
   return
+}
+
+// outrageState 자동발동
+if (myActivePkmn?.outrageState?.active) {
+  const outrageMoveIdx = (myActivePkmn.moves ?? [])
+    .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
+  if (outrageMoveIdx !== -1) {
+    actionDone = true
+    _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: [] })
+      .catch(e => { console.warn("아우트레이지 자동처리 오류:", e.message); actionDone = false })
+    return
+  }
 }
 
 if (needsAutoMove || needsAutoFly || needsAutoDig || myActivePkmn?.hyperBeamState) {
