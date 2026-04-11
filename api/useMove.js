@@ -1447,7 +1447,7 @@ export default async function handler(req, res) {
         const canSwitch   = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
         const uTurnTarget = tSlots[0]
         const uTurnPkmn   = uTurnTarget ? entries[uTurnTarget]?.[data[`${uTurnTarget}_active_idx`] ?? 0] : null
-        if (canSwitch && uTurnPkmn && uTurnPkmn.hp > 0) {
+        if (canSwitch) {
           const { assistEventTs: utAts, syncEventTs: utSts } = await writeLogs(roomId, logEntries)
           const fieldUpdate = {}
           ;["A","B"].forEach(team => {
