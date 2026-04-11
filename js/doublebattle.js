@@ -654,7 +654,7 @@ function updateBenchButtons(data) {
   const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
 
   // 유턴 강제교체 여부 (force_switch + 내 턴 + 살아있음)
-  const forceSwitch = !!(data[`force_switch_${mySlot}`] && data.current_order?.[0] === mySlot)
+  const forceSwitch = !!data[`force_switch_${mySlot}`]
 
   // 고스트다이브/공중날기/구멍파기 중이면 교체 불가
   const isDiving  = !!(myActivePkmn?.ghostDiveState?.diving)

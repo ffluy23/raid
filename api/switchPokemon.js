@@ -80,8 +80,9 @@ export default async function handler(req, res) {
 
   const isFainted = !prevPkmn || prevPkmn.hp <= 0
 
-  if (!isFainted && order[0] !== mySlot)
-    return res.status(403).json({ error: "내 턴이 아님" })
+  const isForceSwitch = !!data[`force_switch_${mySlot}`]
+if (!isFainted && !isForceSwitch && order[0] !== mySlot)
+  return res.status(403).json({ error: "내 턴이 아님" })
 
   if (!nextPkmn || nextPkmn.hp <= 0)
     return res.status(403).json({ error: "교체 대상 포켓몬이 없거나 기절 상태" })
@@ -104,15 +105,16 @@ export default async function handler(req, res) {
   ]
 
   // 기절 교체: 턴 소모 없음
-  if (isFainted) {
-    await writeLogs(db, roomId, logs)
-    await roomRef.update({
+ // 기절 교체 or 유턴 강제교체: 턴 소모 없음
+if (isFainted || isForceSwitch) {
+  await writeLogs(db, roomId, logs)
+  await roomRef.update({
     ...buildEntryUpdate(entries),
     [`${mySlot}_active_idx`]: newIdx,
     [`force_switch_${mySlot}`]: false,
   })
   return res.status(200).json({ ok: true })
-  }
+}
 
   // 일반 교체: 턴 소모
   const newOrder     = order.slice(1)
