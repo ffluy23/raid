@@ -106,7 +106,8 @@ if (!isFainted && !isForceSwitch && order[0] !== mySlot)
 
   // 기절 교체: 턴 소모 없음
  // 기절 교체 or 유턴 강제교체: 턴 소모 없음
-if (isFainted || isForceSwitch) {
+// 기절 교체만 턴 소모 없음
+if (isFainted) {
   await writeLogs(db, roomId, logs)
   await roomRef.update({
     ...buildEntryUpdate(entries),
@@ -115,6 +116,8 @@ if (isFainted || isForceSwitch) {
   })
   return res.status(200).json({ ok: true })
 }
+
+// 유턴 강제교체 + 일반 교체: 아래 턴 소모 분기로 그냥 흘러가게 둠
 
   // 일반 교체: 턴 소모
   const newOrder     = order.slice(1)
