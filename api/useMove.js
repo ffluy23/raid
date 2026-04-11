@@ -117,12 +117,12 @@ function applyRankChanges(r, self, target, moveName, logEntries) {
 function calcHit(atk, moveInfo, def) {
   if (Math.random() * 100 >= (moveInfo.accuracy ?? 100)) return { hit: false, hitType: "missed" }
 
-  // 공중날기 중: 전기 타입 or twister만 명중
-  if (def.flyState?.flying && moveInfo.type !== "전기" && !moveInfo.twister)
-    return { hit: false, hitType: "evaded" }
-  // 구멍파기 중: 땅 타입만 명중
-  if (def.digState?.digging && moveInfo.type !== "땅")
-    return { hit: false, hitType: "evaded" }
+if (def.flyState?.flying && !moveInfo.twister && moveInfo._name !== "번개")
+  return { hit: false, hitType: "evaded" }
+if (def.digState?.digging && moveInfo._name !== "지진")
+  return { hit: false, hitType: "evaded" }
+if (def.ghostDiveState?.diving)
+  return { hit: false, hitType: "evaded" }
 
   if (moveInfo.alwaysHit || moveInfo.skipEvasion) return { hit: true, hitType: "hit" }
 
