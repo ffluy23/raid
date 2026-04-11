@@ -678,14 +678,14 @@ function updateBenchButtons(data) {
         const canSwitch = (isFainted || forceSwitch || (myTurn && !actionDone))
           && !isDiving && !isFlying && !isDigging
         btn.disabled = !canSwitch
-        if (canSwitch) btn.onclick = () => { playSound(SFX_BTN); doSwitchPokemon(idx, data) }
+       if (canSwitch) btn.onclick = () => { playSound(SFX_BTN); doSwitchPokemon(idx, data, forceSwitch) }
       }
     }
     bench.appendChild(btn)
   })
 }
 
-async function doSwitchPokemon(newIdx, data) {
+async function doSwitchPokemon(newIdx, data, forceSwitch = false) {
   const myEntry      = data[`${mySlot}_entry`] ?? []
   const activeIdx    = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = myEntry[activeIdx]
