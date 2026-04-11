@@ -576,7 +576,7 @@ function onMoveClick(idx, moveInfo, data) {
   }
   const r = moveInfo?.rank
   const targetsEnemy =
-    moveInfo?.power || moveInfo?.ghostDive
+    moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
     || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
@@ -1022,7 +1022,7 @@ function listenRoom() {
             }
           }
 
-          if (needsAutoMove || needsAutoFly || needsAutoDig || needsAutoDive || myActivePkmn?.hyperBeamState) {
+         if (!actionDone && (needsAutoMove || needsAutoFly || needsAutoDig || needsAutoDive || myActivePkmn?.hyperBeamState)) {
             actionDone = true
             _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: [] })
               .catch(e => { console.warn("자동처리 오류:", e.message); actionDone = false })

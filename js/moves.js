@@ -340,7 +340,7 @@ export const moves = {
                       healPulse: true, targetSelf: false },
   "참기":           { power: 0,  type: "노말",  accuracy: 100, alwaysHit: true,  effect: null,
                       bide: true, targetSelf: true },
-  "구멍파기":   { power: 50, type: "땅",   accuracy: 100, alwaysHit: false, effect: null, dig: true },
+  "구멍파기":   { power: 50, type: "땅",   accuracy: 1, alwaysHit: false, effect: null, dig: true },
 
   // =====================================================================
 // 더블배틀 moves.js 패치
