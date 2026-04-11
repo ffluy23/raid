@@ -1152,7 +1152,7 @@ export default async function handler(req, res) {
   // ── 하이퍼빔 다음 턴 강제 스킵 ──────────────────────────────
   if (myPkmn.hyperBeamState) {
     myPkmn.hyperBeamState = false
-    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 에너지를 모으고 있다!`))
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 움직일 수 없다!`))
     const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
     return res.status(200).json({ ok: true, ...(winTeam ? { winTeam } : {}) })
   }
