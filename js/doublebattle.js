@@ -745,7 +745,8 @@ function updateBenchButtons(data) {
         btn.disabled = true
       } else {
         const forceSwitch = !!(data[`force_switch_${mySlot}`] && data.current_order?.[0] === mySlot)
-const canSwitch = isFainted || forceSwitch || (myTurn && !actionDone)
+const isDiving = !!(myActivePkmn?.ghostDiveState?.diving)
+const canSwitch = isFainted || forceSwitch || (myTurn && !actionDone && !isDiving)
         btn.disabled = !canSwitch
         if (canSwitch) btn.onclick = () => { playSound(SFX_BTN); doSwitchPokemon(idx, data) }
       }
