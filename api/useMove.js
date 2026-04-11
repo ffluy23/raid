@@ -1463,7 +1463,8 @@ export default async function handler(req, res) {
             ...assistUpdate,
             ...syncUpdate,
             ...fieldUpdate,
-            current_order:   data.current_order ?? [],  // 그대로 유지
+            current_order:   [mySlot, ...(data.current_order ?? []).slice(1)],
+  // 그대로 유지
 turn_count:      data.turn_count ?? 1,      // 턴 카운트도 아직 안 올림
 turn_started_at: data.turn_started_at, 
             [`force_switch_${mySlot}`]: true,
