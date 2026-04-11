@@ -1144,8 +1144,10 @@ export default async function handler(req, res) {
         accuracy: 100,
       })
     }
-    myPkmn.ghostDiveMoveName = null
-    const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries)
+   myPkmn.ghostDiveMoveName = null
+    const winTeam = await finishTurn(roomRef, roomId, data, entries, logEntries, {
+      [`force_switch_${mySlot}`]: false
+    })
     return res.status(200).json({ ok: true, ...(winTeam ? { winTeam } : {}) })
   }
 
@@ -1594,4 +1596,7 @@ export default async function handler(req, res) {
     const win = await handleEot(db, roomId, entries, data, update)
     if (win) { await roomRef.update(update); return res.status(200).json({ ok: true, winTeam: win }) }
   }
+
+    await roomRef.update(update)  // ← 추가
+  return res.status(200).json({ ok: true })  // ← 추가
 }

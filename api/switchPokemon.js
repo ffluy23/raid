@@ -107,10 +107,11 @@ export default async function handler(req, res) {
   if (isFainted) {
     await writeLogs(db, roomId, logs)
     await roomRef.update({
-      ...buildEntryUpdate(entries),
-      [`${mySlot}_active_idx`]: newIdx,
-    })
-    return res.status(200).json({ ok: true })
+    ...buildEntryUpdate(entries),
+    [`${mySlot}_active_idx`]: newIdx,
+    [`force_switch_${mySlot}`]: false,
+  })
+  return res.status(200).json({ ok: true })
   }
 
   // 일반 교체: 턴 소모
@@ -121,6 +122,7 @@ export default async function handler(req, res) {
   const update = {
     ...buildEntryUpdate(entries),
     [`${mySlot}_active_idx`]: newIdx,
+    [`force_switch_${mySlot}`]: false,
     current_order:     newOrder,
     turn_count:        newTurnCount,
     turn_started_at:   newOrder.length > 0 ? Date.now() : null,
