@@ -200,11 +200,20 @@ export function applyEndOfTurnDamage(entries) {
   for (const entry of entries) {
     for (const pkmn of entry) {
       if (pkmn.hp <= 0) continue
-      if (pkmn.status !== "독" && pkmn.status !== "화상") continue
-      const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 16))
-      pkmn.hp = Math.max(0, pkmn.hp - dmg)
-      msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} ${statusName(pkmn.status)} 때문에 ${dmg} 데미지를 입었다!`)
-      if (pkmn.hp <= 0) { msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`); anyFainted = true }
+      // 독/화상
+      if (pkmn.status === "독" || pkmn.status === "화상") {
+        const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 16))
+        pkmn.hp = Math.max(0, pkmn.hp - dmg)
+        msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} ${statusName(pkmn.status)} 때문에 ${dmg} 데미지를 입었다!`)
+        if (pkmn.hp <= 0) { msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`); anyFainted = true }
+      }
+      // 저주
+      if (pkmn.hp > 0 && pkmn.cursed) {
+        const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 8))
+        pkmn.hp = Math.max(0, pkmn.hp - dmg)
+        msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} 저주 때문에 ${dmg} 데미지를 입었다!`)
+        if (pkmn.hp <= 0) { msgs.push(`${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`); anyFainted = true }
+      }
     }
   }
   return { msgs, anyFainted }

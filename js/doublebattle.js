@@ -541,8 +541,8 @@ function updateMoveButtons(data) {
   const chainBound  = myPokemon?.chainBound ?? null
 
   const isAutoTurn = !!(myPokemon?.flyState?.flying || myPokemon?.digState?.digging
-                     || myPokemon?.bideState || myPokemon?.rollState?.active)
-
+                   || myPokemon?.bideState || myPokemon?.rollState?.active
+                   || myPokemon?.hyperBeamState)
   for (let i = 0; i < 4; i++) {
     const btn = $(`move-btn-${i}`)
     if (!btn) continue
@@ -592,7 +592,8 @@ function updateMoveButtons(data) {
     btn.style.background = color
     btn.style.boxShadow  = `inset 0 0 0 2px white, 0 0 0 2px ${color}`
 
-    const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone
+    const lockedByTorment = !!(myPokemon?.tormented && mv.name === myPokemon?.lastUsedMove)
+const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone && !isChainBlocked && !lockedByTorment
     btn.disabled = !canUse
     btn.onclick  = canUse ? () => { playSound(SFX_BTN); onMoveClick(i, moveInfo, data) } : null
   }
@@ -721,7 +722,8 @@ function updateBenchButtons(data) {
       if (isSpectator) {
         btn.disabled = true
       } else {
-        const canSwitch = isFainted || (myTurn && !actionDone)
+        const forceSwitch = !!(data[`force_switch_${mySlot}`] && data.current_order?.[0] === mySlot)
+const canSwitch = isFainted || forceSwitch || (myTurn && !actionDone)
         btn.disabled = !canSwitch
         if (canSwitch) btn.onclick = () => { playSound(SFX_BTN); doSwitchPokemon(idx, data) }
       }
@@ -1083,11 +1085,18 @@ function listenRoom() {
           const needsAutoFly  = myActivePkmn?.flyState?.flying
           const needsAutoDig  = myActivePkmn?.digState?.digging
 
-          if (needsAutoMove || needsAutoFly || needsAutoDig) {
-            actionDone = true
-            _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: [] })
-              .catch(e => { console.warn("자동처리 오류:", e.message); actionDone = false })
-          }
+// 유턴 강제교체 — 자동처리보다 먼저 체크
+if (data[`force_switch_${mySlot}`] && myActivePkmn && myActivePkmn.hp > 0) {
+  actionDone = false
+  applyRoomData(data)
+  return
+}
+
+if (needsAutoMove || needsAutoFly || needsAutoDig || myActivePkmn?.hyperBeamState) {
+  actionDone = true
+  _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: [] })
+    .catch(e => { console.warn("자동처리 오류:", e.message); actionDone = false })
+}
         }
       }
 
