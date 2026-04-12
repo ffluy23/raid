@@ -226,7 +226,7 @@ function triggerAutoAction(data) {
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo.roar || moveInfo.leechSeed || moveInfo.chainBind
     || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder
-    || moveInfo.pollenPuff || moveInfo.curse || moveInfo.ghostDive
+    || moveInfo.pollenPuff || moveInfo.curse || moveInfo.ghostDive|| moveInfo.memento
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
   if (needsTarget) {
