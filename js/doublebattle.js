@@ -141,8 +141,9 @@ function updateSlotUI(slot, data) {
     const confusionTag = (pokemon.confusion ?? 0) > 0 ? " [혼란]" : ""
     const flyTag       = pokemon.flyState?.flying   ? " ✈" : ""
     const digTag       = pokemon.digState?.digging  ? " ⛏" : ""
-    const screenTag    = (pokemon.lightScreenTurns ?? 0) > 0
-      ? ` [막(${pokemon.lightScreenTurns})]` : ""
+   const myTeam = teamOf(slot)
+const screenTurns = data[`lightScreen_team${myTeam}`] ?? 0
+const screenTag = screenTurns > 0 ? ` [막(${screenTurns})]` : ""
     nameEl.innerText = (pokemon.name ?? "???") + statusTag + confusionTag + flyTag + digTag + screenTag
   }
 
