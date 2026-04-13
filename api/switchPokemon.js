@@ -94,6 +94,14 @@ if (!isFainted && !isForceSwitch && order[0] !== mySlot)
   resetOnSwitch(prevPkmn)
   nextPkmn.seeded = false
 
+
+  // 치유소원 회복
+  const healWish = nextPkmn.healOnSwitchIn ?? false
+  if (healWish) {
+    nextPkmn.hp = nextPkmn.maxHp ?? nextPkmn.hp
+    nextPkmn.healOnSwitchIn = false
+  }
+  
   // 장판 발동 — active_idx를 newIdx로 미리 반영해야 올바른 포켓몬에 적용됨
   data[`${mySlot}_active_idx`] = newIdx
   const hazardLogs = applyEntryHazards(mySlot, entries, data)
