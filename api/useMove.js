@@ -1597,6 +1597,23 @@ const chargedMult = (myPkmn.charged && moves[moveData.name]?.type === "전기") 
               logEntries.push(makeLog("hp",       "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
               logEntries.push(makeLog("after_hit", `${supPkmn.name}${josa(supPkmn.name, "이가")} 연속으로 추가 공격했다! (${bonusDmg} 데미지)`))
               if (tPkmn.hp <= 0) logEntries.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name, "은는")} 쓰러졌다!`, { slot: tSlot }))
+                
+            }
+          }
+
+          if (moveInfo?.sparks) {
+            const enemySlots = teamOf(tSlot) === "A" ? ["p1","p2"] : ["p3","p4"]
+            const splashSlot = enemySlots.find(s => s !== tSlot)
+            if (splashSlot) {
+              const spIdx  = data[`${splashSlot}_active_idx`] ?? 0
+              const spPkmn = entries[splashSlot][spIdx]
+              if (spPkmn && spPkmn.hp > 0) {
+                const spDmg = Math.max(1, Math.floor((spPkmn.maxHp ?? spPkmn.hp) / 16))
+                spPkmn.hp   = Math.max(0, spPkmn.hp - spDmg)
+                logEntries.push(makeLog("normal", `불꽃이 ${spPkmn.name}에게도 튀었다!`))
+                logEntries.push(makeLog("hp", "", { slot: splashSlot, hp: spPkmn.hp, maxHp: spPkmn.maxHp }))
+                if (spPkmn.hp <= 0) logEntries.push(makeLog("faint", `${spPkmn.name}${josa(spPkmn.name, "은는")} 쓰러졌다!`, { slot: splashSlot }))
+              }
             }
           }
 
