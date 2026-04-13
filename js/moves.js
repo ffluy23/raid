@@ -172,6 +172,7 @@ export const moves = {
   "인파이트":           { power: 60, type: "격투", accuracy: 100, alwaysHit: false, targetSelf: true, effect: null,
                           rank: { def: -1, turns: 2 } },
   "파동탄":             { power: 40, type: "격투", accuracy: 100, alwaysHit: true,  effect: null },
+  "기합구슬":             { power: 60, type: "격투", accuracy: 70, alwaysHit: false,  effect: null, rank: { chance: 0.1, targetDef: -1, turns: 2 }   },
   "깨트리기":           { power: 45, type: "격투", accuracy: 100, alwaysHit: false, effect: null, breakBarrier: true },
   "발뒤꿈치떨어뜨리기": { power: 40, type: "격투", accuracy: 100, alwaysHit: false, effect: null },
   "드레인펀치":         { power: 45, type: "격투", accuracy: 100, alwaysHit: false, effect: { drain: 0.15 } },
