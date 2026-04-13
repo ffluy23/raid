@@ -95,7 +95,7 @@ function applyRankChanges(r, self, target, moveName, logEntries) {
       if ((obj[`${key}Turns`] ?? 0) <= 0) obj[`${key}Turns`] = r.turns ?? 2
       logEntries.push(makeLog("normal", `${name}의 ${label} 랭크가 ${next - cur} 올라갔다! (${next > 0 ? "+" : ""}${next})`))
     } else if (delta < 0) {
-      const minVal = isTarget ? -maxVal : 0
+      const minVal = -maxVal
       if (cur <= minVal) { logEntries.push(makeLog("normal", `${name}의 ${label} 랭크는 더 이상 내려가지 않는다!`)); return }
       const next = Math.max(minVal, cur + delta)
       obj[key] = next
