@@ -548,6 +548,8 @@ if (moveInfo.lightScreen) {
     return { handled: true }
   }
 
+  
+
   if (moveInfo.effect?.weather) {
     const allPokemon = ALL_FS.map(s => entries[s]).flat()
     const prevWeather = data.weather ?? null
@@ -986,6 +988,17 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
       myPkmn.seederSlot = null
       logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 씨뿌리기가 풀렸다!`))
     }
+
+     const myTeamForSpin = teamOf(mySlot)
+  const enemyTeamForSpin = myTeamForSpin === "A" ? "B" : "A"
+  ;["stealth_rock", "toxic_spikes"].forEach(f => {
+    const k = `field_${myTeamForSpin}_${f}`
+    if (data[k]) {
+      data[k] = 0
+      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 장판을 날려버렸다!`))
+    }
+  })
+
     if (moveInfo.rank) applyRankChanges(moveInfo.rank, myPkmn, tPkmn, null, logEntries)
     return { handled: true, damage }
   }
@@ -1150,6 +1163,9 @@ export default async function handler(req, res) {
 if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
   return res.status(403).json({ error: "지옥찌르기로 사용 불가" })
 
+if ((myPkmn.taunted ?? 0) > 0 && !(moves[moveData.name]?.power > 0))
+  return res.status(403).json({ error: "도발로 사용 불가" })
+
   const myTeam    = teamOf(mySlot)
   const assistKey = `assist_team${myTeam}`
   const assist    = data[assistKey] ?? null
@@ -1166,6 +1182,37 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
     const volatileMsgs = tickVolatiles(myPkmn)
     volatileMsgs.forEach(m => logEntries.push(makeLog("normal", m)))
   }
+
+  // ── 미래예지 발동 체크 ─────────────────────────────────────────
+ALL_FS.forEach(s => {
+  const idx  = data[`${s}_active_idx`] ?? 0
+  const pkmn = entries[s][idx]
+  if (!pkmn || !pkmn.futureSight) return
+  pkmn.futureSight.turnsLeft--
+  if (pkmn.futureSight.turnsLeft <= 0) {
+    const fs = pkmn.futureSight
+    pkmn.futureSight = null
+    const targetSlot = fs.targetSlot ?? null
+    if (!targetSlot) return
+    const tIdx  = data[`${targetSlot}_active_idx`] ?? 0
+    const tPkmn = entries[targetSlot][tIdx]
+    if (!tPkmn || tPkmn.hp <= 0) return
+    logEntries.push(makeLog("normal", `${fs.attackerName}의 미래예지!`))
+    const { damage, multiplier, critical } = calcDamage(pkmn, "미래예지", tPkmn)
+    if (multiplier === 0) {
+      logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`))
+      return
+    }
+    tPkmn.hp = Math.max(0, tPkmn.hp - damage)
+    if (tPkmn.hp <= 0 && tPkmn.enduring) { tPkmn.hp = 1; tPkmn.enduring = false }
+    logEntries.push(makeLog("hit", "", { defender: targetSlot }))
+    logEntries.push(makeLog("hp",  "", { slot: targetSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
+    if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+    if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
+    if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+    if (tPkmn.hp <= 0)  logEntries.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name, "은는")} 쓰러졌다!`, { slot: targetSlot }))
+  }
+})
 
   // ── 공중날기 2턴째 ────────────────────────────────────────────
   if (myPkmn.flyState?.flying) {
@@ -1348,7 +1395,22 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
           return res.status(200).json({ ok: true })
         }
 
+          if (specialResult.healingWish) {
+          const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
+          await writeLogs(roomId, logEntries)
+          await roomRef.update({
+            ...buildEntryUpdate(entries),
+            current_order: [mySlot, ...(data.current_order ?? []).slice(1)],
+            turn_count: data.turn_count ?? 1,
+            turn_started_at: data.turn_started_at,
+            [`force_switch_${mySlot}`]: canSwitch,
+          })
+          return res.status(200).json({ ok: true })
+        }
+
         if (!specialResult.handled) {
+
+          
           const r            = moveInfo?.rank
           const targetsEnemy = (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
             || moveInfo?.targetSelf === false
@@ -1445,7 +1507,7 @@ const chargedMult = (myPkmn.charged && moves[moveData.name]?.type === "전기") 
             damage = Math.floor(damage * chargedMult)
             logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!"))
           }
-          
+
           if (!isAoe) logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
           if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
