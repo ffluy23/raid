@@ -64,7 +64,7 @@ const TYPE_COLORS = {
 let timerTickInterval = null
 let timerSecondsLeft  = 120
 let lastTurnSlot      = null
-const TIMER_SECONDS   = 15
+const TIMER_SECONDS   = 30
 
 function $(id) { return document.getElementById(id) }
 function rollD10() { return Math.floor(Math.random() * 10) + 1 }
