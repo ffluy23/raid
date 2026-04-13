@@ -169,9 +169,15 @@ function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = 
   const raw      = Math.floor(base * mult * (stab ? 1.3 : 1))
   const atkRank  = getActiveRankVal(atk, "atk")
   const afterAtk = Math.max(0, raw + atkRank)
-  const afterDef = Math.max(0, afterAtk - getBaseStat(def, "def") * 5)
+ const afterDef = afterAtk - getBaseStat(def, "def") * 5
   const defRank  = getActiveRankVal(def, "def")
-  const baseDmg  = Math.max(0, afterDef - defRank * 3)
+  const baseDmg  = afterDef - defRank * 3
+
+  if (baseDmg <= 0) {
+    const minDice = Math.floor(Math.random() * 5) + 1
+    const minDamage = minDice * 5
+    return { damage: minDamage, multiplier: mult, stab, critical: false, dice, minRoll: true, minDice }
+  }
 
   
   const flyElecMult    = (def.flyState?.flying && move.type === "번개") ? 1.2 : 1.0
@@ -532,13 +538,14 @@ function handleSpecialAttack(moveInfo, moveName, myPkmn, mySlot, tSlot, tPkmn, e
   const missLog = (hitType) => logEntries.push(makeLog("normal",
     hitType === "evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
 
-  function dealDamage(dmg, multiplier, critical, slot, pkmn) {
+ function dealDamage(dmg, multiplier, critical, slot, pkmn, minRoll = false, minDice = 0) {
     pkmn.hp = Math.max(0, pkmn.hp - dmg)
     logEntries.push(makeLog("hit",  "", { defender: slot }))
     logEntries.push(makeLog("hp",   "", { slot, hp: pkmn.hp, maxHp: pkmn.maxHp }))
     if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
     if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
-    if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+    if (minRoll)        logEntries.push(makeLog("after_hit", `${minDice}! (최소 피해 보장)`))
+    else if (critical)  logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
     if (pkmn.hp <= 0)   logEntries.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot }))
   }
 
@@ -572,9 +579,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     if (Math.random() < 0.5) {
-      const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+      const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
       if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-      dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+      dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
       if (tPkmn.hp > 0) {
         tPkmn.flinch = true
         logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 풀이 죽었다!`))
@@ -616,11 +623,11 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     const comebackMult = (moveInfo.comeback && lastDmg > 0) ? 1.2 : 1.0
-    const { damage: rawDmg, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
     if (comebackMult > 1) logEntries.push(makeLog("after_hit", "원한이 쌓인 일격!"))
     const finalDmg = Math.floor(rawDmg * comebackMult)
-    dealDamage(finalDmg, multiplier, critical, tSlot, tPkmn)
+    dealDamage(finalDmg, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     myPkmn.lastReceivedDamage = 0
     return { handled: true, damage: finalDmg }
   }
@@ -630,9 +637,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     const hpRatio = myPkmn.hp / (myPkmn.maxHp ?? myPkmn.hp)
     const revMult = hpRatio <= 0.25 ? 2.0 : hpRatio <= 0.5 ? 1.5 : 1.0
-    const { damage: rawDmg, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+   const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(Math.floor(rawDmg * revMult), multiplier, critical, tSlot, tPkmn)
+    dealDamage(Math.floor(rawDmg * revMult), multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: Math.floor(rawDmg * revMult) }
   }
 
@@ -640,10 +647,10 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     const gutsMult = myPkmn.status ? 1.2 : 1.0
-    const { damage: rawDmg, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
     if (myPkmn.status) logEntries.push(makeLog("after_hit", `${myPkmn.name}${josa(myPkmn.name, "은는")} 객기를 부렸다!`))
-    dealDamage(Math.floor(rawDmg * gutsMult), multiplier, critical, tSlot, tPkmn)
+    dealDamage(Math.floor(rawDmg * gutsMult), multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: Math.floor(rawDmg * gutsMult) }
   }
 
@@ -651,9 +658,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     const finMult = tPkmn.hp <= (tPkmn.maxHp ?? tPkmn.hp) * 0.5 ? 1.2 : 1.0
-    const { damage: rawDmg, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(Math.floor(rawDmg * finMult), multiplier, critical, tSlot, tPkmn)
+    dealDamage(Math.floor(rawDmg * finMult), multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: Math.floor(rawDmg * finMult) }
   }
 
@@ -678,9 +685,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     const power = calcGyroBallPower(myPkmn, tPkmn)
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn, power)
+   const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn, power)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage }
   }
 
@@ -688,9 +695,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     const power = calcAssistPower(myPkmn)
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn, power)
+   const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn, power)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage }
   }
 
@@ -728,9 +735,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
   if (moveInfo.effect && moveInfo.effect.recoil) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+     const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     const recoil = Math.max(1, Math.floor(damage * moveInfo.effect.recoil))
     myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
     logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${recoil} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
@@ -794,9 +801,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const currentTurn = isFirst ? 1 : state.turn
     const power       = outrageInfo.powers[Math.min(currentTurn - 1, outrageInfo.powers.length - 1)]
     const isLastTurn  = currentTurn >= maxTurn
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn, power)
-    if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn, power)
+     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     if (isLastTurn) {
       myPkmn.outrageState = null
       if (outrageInfo.confusion && (myPkmn.confusion ?? 0) <= 0) {
@@ -817,17 +824,17 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
     tPkmn.ranks = defaultRanks()
     logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "의")} 능력 변화가 원래대로 돌아왔다!`))
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
-    if (multiplier > 0) dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+     const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
+    if (multiplier > 0) dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: multiplier > 0 ? damage : 0 }
   }
 
   if (moveInfo.dragonTail) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     if (tPkmn.hp > 0) {
       const tIdx   = data[`${tSlot}_active_idx`] ?? 0
       const tEntry = entries[tSlot]
@@ -845,41 +852,41 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
   if (moveInfo.trickster) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn, null, tPkmn.attack ?? 3)
+   const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn, null, tPkmn.attack ?? 3)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
     const finalDmg = Math.floor(damage * 0.7)
-    dealDamage(finalDmg, multiplier, critical, tSlot, tPkmn)
+    dealDamage(finalDmg, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: finalDmg }
   }
 
   if (moveInfo.sickPower) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const sickMult = tPkmn.status ? 1.2 : 1.0
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+   const sickMult = tPkmn.status ? 1.2 : 1.0
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
     if (sickMult > 1) logEntries.push(makeLog("after_hit", `${tPkmn.name}${josa(tPkmn.name, "의")} 상태이상이 약점이 됐다!`))
-    dealDamage(Math.floor(damage * sickMult), multiplier, critical, tSlot, tPkmn)
+    dealDamage(Math.floor(damage * sickMult), multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: Math.floor(damage * sickMult) }
   }
 
   if (moveInfo.venomShock) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const vsMult = tPkmn.status === "독" ? 1.2 : 1.0
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+   const vsMult = tPkmn.status === "독" ? 1.2 : 1.0
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
     if (vsMult > 1) logEntries.push(makeLog("after_hit", `${tPkmn.name}${josa(tPkmn.name, "은는")} 독 상태라 피해가 커졌다!`))
-    dealDamage(Math.floor(damage * vsMult), multiplier, critical, tSlot, tPkmn)
+    dealDamage(Math.floor(damage * vsMult), multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     return { handled: true, damage: Math.floor(damage * vsMult) }
   }
 
   if (moveInfo.throatChop) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     if (tPkmn.hp > 0) {
       tPkmn.throatChopped = 2
       logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 목을 눌려 소리를 낼 수 없게 됐다!`))
@@ -890,9 +897,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
   if (moveInfo.enchantedVoice) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     if (tPkmn.hp > 0) {
       const eneRanks = tPkmn.ranks ?? {}
       const hasBuff  =
@@ -924,9 +931,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
   if (moveInfo.rapidSpin) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+     const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     if (myPkmn.seeded) {
       myPkmn.seeded     = false
       myPkmn.seederSlot = null
@@ -939,9 +946,9 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
   if (moveInfo.breakBarrier) {
     const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
     if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
+     const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
-    dealDamage(damage, multiplier, critical, tSlot, tPkmn)
+    dealDamage(damage, multiplier, critical, tSlot, tPkmn, minRoll, minDice)
     if ((tPkmn.lightScreenTurns ?? 0) > 0) {
       tPkmn.lightScreenTurns = 0
       logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "의")} 빛의 장막이 깨졌다!`))
@@ -1376,7 +1383,7 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
             else                     powerOverride = 70
           }
 
-          let { damage, multiplier, critical, dice } = calcDamage(myPkmn, moveData.name, tPkmn, powerOverride, null, aoeDice)
+         let { damage, multiplier, critical, dice, minRoll, minDice } = calcDamage(myPkmn, moveData.name, tPkmn, powerOverride, null, aoeDice)
           const defTeam = teamOf(tSlot)
 if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?? 0) > 0) {
   damage = Math.floor(damage * 0.75)
@@ -1413,9 +1420,10 @@ if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?
 
           logEntries.push(makeLog("hit", "", { defender: tSlot }))
           logEntries.push(makeLog("hp",  "", { slot: tSlot, hp: tPkmn.hp, maxHp: tPkmn.maxHp }))
-          if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+         if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
           if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
-          if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+          if (minRoll)        logEntries.push(makeLog("after_hit", `${minDice}! (최소 피해 보장)`))
+          else if (critical)  logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
           if (isRequester && assistUsedThisTurn) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
 
           if (moveInfo?.breakBarrier) {
