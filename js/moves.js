@@ -179,6 +179,7 @@ export const moves = {
   "진공파":             { power: 35, type: "격투", accuracy: 100, alwaysHit: true,  effect: null },
    "발경":         { power: 40, type: "격투", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "마비" } },
    "성스러운칼": { power: 50, type: "격투", accuracy: 100, alwaysHit: false, skipEvasion: true, ignoreDefRank: true, effect: null },
+   "리벤지": { power: 40, type: "격투", accuracy: 100, revenge: true },
 
   // ───── 독 ─────
   "용해액":   { power: 30, type: "독", accuracy: 100, alwaysHit: false, effect: null,
