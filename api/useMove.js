@@ -517,6 +517,37 @@ if (moveInfo.lightScreen) {
     return { handled: true }
   }
 
+  if (moveInfo.taunt) {
+    if (tSlots.length === 0) return { handled: true }
+    const tSlot = tSlots[0]
+    const tIdx  = data[`${tSlot}_active_idx`] ?? 0
+    const tPkmn = entries[tSlot][tIdx]
+    if (!tPkmn || tPkmn.hp <= 0) return { handled: true }
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, tPkmn)
+    if (!hit) {
+      logEntries.push(makeLog("normal",
+        hitType === "evaded"
+          ? `${tPkmn.name}에게는 맞지 않았다!`
+          : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`
+      ))
+      return { handled: true }
+    }
+    if ((tPkmn.taunted ?? 0) > 0) {
+      logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 이미 도발 상태다!`))
+    } else {
+      tPkmn.taunted = 3
+      logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 도발에 걸렸다!`))
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.charge) {
+    myPkmn.charged = true
+    applyRankChanges({ def: 1, turns: 2 }, myPkmn, myPkmn, moveName, logEntries)
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 전기를 충전했다!`))
+    return { handled: true }
+  }
+
   if (moveInfo.effect?.weather) {
     const allPokemon = ALL_FS.map(s => entries[s]).flat()
     const prevWeather = data.weather ?? null
@@ -527,6 +558,7 @@ if (moveInfo.lightScreen) {
     data.weatherTurns = newTurns
     return { handled: true }
   }
+
 
   if (moveInfo.field) {
     const enemyTeam = teamOf(mySlot) === "A" ? "B" : "A"
@@ -1406,6 +1438,14 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
 if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?? 0) > 0) {
   damage = Math.floor(damage * 0.75)
 }
+
+const chargedMult = (myPkmn.charged && moves[moveData.name]?.type === "전기") ? 1.2 : 1.0
+          myPkmn.charged = false
+          if (chargedMult > 1) {
+            damage = Math.floor(damage * chargedMult)
+            logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!"))
+          }
+          
           if (!isAoe) logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
           if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
@@ -1566,6 +1606,12 @@ if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?
       const pkmn = entries[s][idx]
       if (!pkmn) return
       tickRanks(pkmn, logEntries)
+      if ((pkmn.taunted ?? 0) > 0) {
+        pkmn.taunted--
+        if (pkmn.taunted <= 0) {
+          logEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 도발이 풀렸다!`))
+        }
+      }
       if (pkmn.chainBound) {
         pkmn.chainBound.turnsLeft--
         if (pkmn.chainBound.turnsLeft <= 0) {

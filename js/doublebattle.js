@@ -226,7 +226,7 @@ function triggerAutoAction(data) {
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo.roar || moveInfo.leechSeed || moveInfo.chainBind
     || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder
-    || moveInfo.pollenPuff || moveInfo.curse || moveInfo.ghostDive|| moveInfo.memento
+    || moveInfo.pollenPuff || moveInfo.curse || moveInfo.ghostDive|| moveInfo.memento || moveInfo.taunt
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
   if (needsTarget) {
@@ -545,9 +545,10 @@ function updateMoveButtons(data) {
     const soundMoves         = ["금속음","돌림노래","바크아웃","소란피기","싫은소리","울부짖기","울음소리","차밍보이스","비밀이야기","하이퍼보이스","매혹의보이스"]
     const lockedByThroatChop = !!((myPokemon?.throatChopped ?? 0) > 0 && soundMoves.includes(mv.name))
     const lockedByOutrage    = !!(myPokemon?.outrageState?.active)
+    const lockedByTaunt = !!((myPokemon?.taunted ?? 0) > 0 && !(moveInfo?.power > 0))
 
     const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone
-      && !isChainBlocked && !lockedByTorment && !lockedByThroatChop && !lockedByOutrage
+      && !isChainBlocked && !lockedByTorment && !lockedByThroatChop && !lockedByOutrage && !lockedByTaunt
     btn.disabled = !canUse
     btn.onclick  = canUse ? () => { playSound(SFX_BTN); onMoveClick(i, moveInfo, data) } : null
   }
@@ -575,8 +576,9 @@ function onMoveClick(idx, moveInfo, data) {
     doUseMove(idx, enemyTargets, data); return
   }
   const r = moveInfo?.rank
-  const targetsEnemy =
+ const targetsEnemy =
     moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
+    || moveInfo?.taunt
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
     || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder

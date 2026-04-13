@@ -117,8 +117,7 @@ export const moves = {
                     effect: { chance: 1, status: "마비" } },
   "전자포":   { power: 60,  type: "전기", accuracy: 50,  alwaysHit: false, targetSelf: false,
                     effect: { chance: 1, status: "마비" } },
-  "충전":         { power: 0,  type: "전기", accuracy: 100, alwaysHit: true, targetSelf: true, effect: null,
-                    rank: { atk: 2, def: 1, turns: 2 } },
+  "충전": { power: 0, type: "전기", accuracy: 100, alwaysHit: true, targetSelf: true, effect: null, charge: true, rank: { def: 1, turns: 2 } },
 
   // ───── 풀 ─────
   "에너지볼":   { power: 40, type: "풀", accuracy: 100, alwaysHit: false, effect: null,
@@ -257,6 +256,7 @@ export const moves = {
   "거짓울음":   { power: 0, type: "악", accuracy: 100, alwaysHit: false, effect: null,
                   rank: { targetDef: -2, turns: 2 } },
   "승부굳히기": { power: 40, type: "악", accuracy: 100, alwaysHit: false, effect: null, finisher: true },
+  "도발": { power: 0, type: "악", accuracy: 100, alwaysHit: false, effect: null, taunt: true, targetSelf: false },
 
   // ───── 강철 ─────
   "아이언테일": { power: 50, type: "강철", accuracy: 75,  alwaysHit: false, effect: null,
