@@ -11,6 +11,11 @@ import {
   teamOf, allySlot, roomName, rollD10, getActiveRank, corsHeaders,
   handleEot
 } from "../lib/gameUtils.js"
+import {
+  startWeather, getWeatherLog, applyWeatherDamage,
+  tickWeather, endWeather, getWeatherDamageMult,
+  patchMoveForWeather, getSunnyGrowthBonus
+} from "../lib/weather.js"
 
 function makeLog(type, text = "", meta = null) {
   return { type, text, ...(meta ? { meta } : {}) }
@@ -512,6 +517,17 @@ if (moveInfo.lightScreen) {
     return { handled: true }
   }
 
+  if (moveInfo.effect?.weather) {
+    const allPokemon = ALL_FS.map(s => entries[s]).flat()
+    const prevWeather = data.weather ?? null
+    const { msgs: wMsgs, weather: newWeather, weatherTurns: newTurns } =
+      startWeather(moveInfo.effect.weather, moveInfo.effect.weatherTurns ?? 5, prevWeather, allPokemon)
+    for (const msg of wMsgs) logEntries.push(makeLog("normal", msg))
+    data.weather = newWeather
+    data.weatherTurns = newTurns
+    return { handled: true }
+  }
+
   if (moveInfo.field) {
     const enemyTeam = teamOf(mySlot) === "A" ? "B" : "A"
     const fieldKey  = `field_${enemyTeam}_${moveInfo.field}`
@@ -767,8 +783,7 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
   
     const critRate = Math.min(100, (myPkmn.defense ?? 3) * 2)
     const critical = Math.random() * 100 < critRate
-    const finalDmg = Math.floor(baseDmg * flyElecMult * twisterFlyMult * digEarthMult)
-    const damage   = critical ? Math.floor(finalDmg * 1.5) : finalDmg
+    const damage   = critical ? Math.floor(baseDmg * 1.5) : baseDmg
     dealDamage(damage, mult, critical, tSlot, tPkmn)
     return { handled: true, damage }
   }
@@ -1049,6 +1064,9 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
     const k = `lightScreen_team${team}`
     if (data[k] !== undefined) finalUpdate[k] = data[k]
   })
+
+  if (data.weather    !== undefined) finalUpdate.weather      = data.weather
+  if (data.weatherTurns !== undefined) finalUpdate.weatherTurns = data.weatherTurns
   
   const winTeam = checkWin(entries)
   if (winTeam) {
@@ -1587,6 +1605,9 @@ if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?
     if (data[k] !== undefined) update[k] = data[k]
   })
 
+  if (data.weather      !== undefined) update.weather      = data.weather
+  if (data.weatherTurns !== undefined) update.weatherTurns = data.weatherTurns
+
   const winTeam = checkWin(entries)
   if (winTeam) {
     update.game_over       = true
@@ -1634,6 +1655,29 @@ if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?
           eotLogEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 다시 소리를 낼 수 있게 됐다!`))
       }
     })
+
+    if (data.weather) {
+      const weatherLog = getWeatherLog(data.weather)
+      if (weatherLog) eotLogEntries.push(makeLog("normal", weatherLog))
+      const activePokemons = ALL_FS.map(s => ({
+        pokemon: entries[s][data[`${s}_active_idx`] ?? 0],
+        slot: s
+      }))
+      const { msgs: wMsgs, anyFainted: wFainted } = applyWeatherDamage(data.weather, activePokemons)
+      for (const log of wMsgs) eotLogEntries.push(log)
+      const { expired, weatherTurns: nextTurns } = tickWeather(data.weatherTurns)
+      if (expired) {
+        const allPokemon = ALL_FS.map(s => entries[s]).flat()
+        const { msgs: endMsgs } = endWeather(data.weather, allPokemon)
+        for (const msg of endMsgs) eotLogEntries.push(msg)
+        data.weather = null
+        data.weatherTurns = 0
+      } else {
+        data.weatherTurns = nextTurns
+      }
+      update.weather      = data.weather ?? null
+      update.weatherTurns = data.weatherTurns ?? 0
+    }
 
     ;["A","B"].forEach(team => {
       const k = `lightScreen_team${team}`
