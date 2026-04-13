@@ -73,6 +73,7 @@ export const moves = {
 
   // ───── 불 ─────
   "화염바퀴":       { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
+  "블레이즈킥":     { power: 50, type: "불", accuracy: 90, alwaysHit: false, effect: { chance: 0.1, status: "화상" }, highCrit: true },
   "니트로차지":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null, rank: { spd: 1, turns: 3 } },
   "불꽃세례":       { power: 30, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상", thawEnemy: true } },
   "도깨비불":       { power: 0,  type: "불", accuracy: 85,  alwaysHit: false, targetSelf: false, effect: { chance: 1, status: "화상" } },
@@ -84,6 +85,7 @@ export const moves = {
   "화염방사":       { power: 50, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
   "열사의대지":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "화상" } },
   "플레어드라이브": { power: 70, type: "불", accuracy: 100, alwaysHit: false, effect: { recoil: 0.33, chance: 0.1, status: "화상" } },
+  "오버히트":   { power: 70, type: "불", accuracy: 100, alwaysHit: false, effect: null, targetSelf:true, rank: { atk: -1, turns: 3 } },
 
   // ───── 물 ─────
   "거품광선":   { power: 40, type: "물", accuracy: 100, alwaysHit: false, effect: null },
@@ -106,6 +108,8 @@ export const moves = {
                     rank: { chance: 0.2, targetDef: -1, turns: 2 } },
   "탁류":       { power: 50, type: "물", accuracy: 85,  alwaysHit: false, targetSelf: false, effect: null,
                   rank: { chance: 0.3, targetSpd: -1, turns: 3 }, aoeEnemy: true },
+  "퀵턴": { power: 40, type: "물", accuracy: 100, alwaysHit: false,
+          effect: null, uTurn: true },
 
   // ───── 전기 ─────
   "번개펀치":     { power: 45, type: "전기", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "마비" } },
@@ -172,6 +176,8 @@ export const moves = {
   "바디프레스":         { power: 50, type: "격투", accuracy: 100, alwaysHit: false, effect: null, bodyPress: true },
   "무릎차기":           { power: 70, type: "격투", accuracy: 90,  alwaysHit: false, effect: null, jumpKick: true },
   "진공파":             { power: 35, type: "격투", accuracy: 100, alwaysHit: true,  effect: null },
+   "발경":         { power: 40, type: "격투", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "마비" } },
+   "성스러운칼": { power: 50, type: "격투", accuracy: 100, alwaysHit: false, skipEvasion: true, ignoreDefRank: true, effect: null },
 
   // ───── 독 ─────
   "용해액":   { power: 30, type: "독", accuracy: 100, alwaysHit: false, effect: null,

@@ -158,7 +158,7 @@ function calcAssistPower(pokemon) {
   return 50
 }
 
-function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = null, diceOverride = null) {
+function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = null, diceOverride = null, ignoreDefRank = false) {
   const move = moves[moveName]
   if (!move) return { damage: 0, multiplier: 1, stab: false, critical: false, dice: 0 }
   const dice     = diceOverride ?? rollD10()
@@ -175,8 +175,8 @@ function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = 
   const atkRank  = getActiveRankVal(atk, "atk")
   const afterAtk = Math.max(0, raw + atkRank)
  const afterDef = afterAtk - getBaseStat(def, "def") * 5
-  const defRank  = getActiveRankVal(def, "def")
-  const baseDmg  = afterDef - defRank * 3
+  const defRank  = ignoreDefRank ? 0 : getActiveRankVal(def, "def")
+const baseDmg  = afterDef - defRank * 3
 
   if (baseDmg <= 0) {
     const minDice = Math.floor(Math.random() * 5) + 1
@@ -1495,7 +1495,7 @@ ALL_FS.forEach(s => {
             else                     powerOverride = 70
           }
 
-         let { damage, multiplier, critical, dice, minRoll, minDice } = calcDamage(myPkmn, moveData.name, tPkmn, powerOverride, null, aoeDice)
+        let { damage, multiplier, critical, dice, minRoll, minDice } = calcDamage(myPkmn, moveData.name, tPkmn, powerOverride, null, aoeDice, moveInfo?.ignoreDefRank ?? false)
           const defTeam = teamOf(tSlot)
 if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?? 0) > 0) {
   damage = Math.floor(damage * 0.75)
