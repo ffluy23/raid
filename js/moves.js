@@ -82,7 +82,7 @@ export const moves = {
   "불대문자":       { power: 40, type: "불", accuracy: 85,  alwaysHit: false, effect: null },
   "매지컬플레임":   { power: 45, type: "불", accuracy: 100, alwaysHit: false, effect: null,
                       rank: { targetAtk: -1, turns: 2 } },
-  "불꽃튀기기":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null },
+  "불꽃튀기기":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null, sparks: true  },
   "화염방사":       { power: 50, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
   "열사의대지":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "화상" } },
   "플레어드라이브": { power: 70, type: "불", accuracy: 100, alwaysHit: false, effect: { recoil: 0.33, chance: 0.1, status: "화상" } },
