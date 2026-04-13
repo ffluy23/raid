@@ -60,6 +60,8 @@ export default async function handler(req, res) {
     force_switch_p2: false,
     force_switch_p3: false,
     force_switch_p4: false,
+    lightScreen_teamA: 0,
+lightScreen_teamB: 0,
   })
 
   return res.status(200).json({ ok: true })
