@@ -9,7 +9,7 @@ import { josa } from "./effecthandler.js"
 
 window.__moves = moves
 
-const API = "https://ffluy231.vercel.app/api"
+const API = "https://zenithfrontier.vercel.app/api"
 
 const SFX_DICE = "https://slippery-copper-mzpmcmc2ra.edgeone.app/soundreality-bicycle-bell-155622.mp3"
 const SFX_BTN  = "https://usual-salmon-mnqxptwyvw.edgeone.app/Pokemon%20(A%20Button)%20-%20Sound%20Effect%20(HD)%20(1)%20(1).mp3"
