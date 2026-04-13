@@ -91,6 +91,7 @@
   <div class="subtitle">4명이 모이면 자동으로 시작</div>
 
   <!-- ✅ id 복구 -->
+  <span id="match-icon" class="match-icon"></span>
   <div class="match-ring" id="match-ring"></div>
 
   <div class="slots" id="slots" style="display:none">
@@ -241,7 +242,7 @@ function stopAll() {
 function setUI(state) {
   if (state === "idle") {
     matchIcon.style.display = "block"
-    matchIcon.textContent = "⚔️"
+
     matchRing.style.display = "none"
     slotsEl.style.display = "none"
     startBtn.style.display = "block"
@@ -258,7 +259,7 @@ function setUI(state) {
   } else if (state === "matched") {
     matchRing.style.display = "none"
     matchIcon.style.display = "block"
-    matchIcon.textContent = "✅"
+
     cancelBtn.style.display = "none"
     statusMsg.textContent = "매칭 완료!"
     elapsedEl.textContent = ""
