@@ -579,7 +579,7 @@ function onMoveClick(idx, moveInfo, data) {
   const r = moveInfo?.rank
  const targetsEnemy =
     moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
-    || moveInfo?.taunt
+    || moveInfo?.taunt|| moveInfo?.memento
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
     || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
