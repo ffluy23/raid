@@ -481,7 +481,8 @@ export const moves = {
                    rank: { chance: 0.2, targetAtk: -1, turns: 2 } },
   "지옥찌르기": { power: 50, type: "악", accuracy: 100, alwaysHit: false, effect: null, throatChop: true },
   "트집":       { power: 0, type: "악", accuracy: 100, alwaysHit: false, effect: null, torment: true, targetSelf: false },
-  "추억의선물": { power: 0, type: "악", accuracy: 100, alwaysHit: true, effect: null, memento: true },
+ "추억의선물": { power: 0, type: "악", accuracy: 100, alwaysHit: true, 
+               effect: null, memento: true, targetSelf: false },
 
   // ───── 페어리 ─────
   "달빛":       { power: 0, type: "페어리", accuracy: 100, alwaysHit: true,

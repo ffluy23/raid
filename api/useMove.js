@@ -173,14 +173,14 @@ function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = 
   const defRank  = getActiveRankVal(def, "def")
   const baseDmg  = Math.max(0, afterDef - defRank * 3)
 
-  const screenMult     = (def.lightScreenTurns ?? 0) > 0 && !move.breakBarrier ? 0.75 : 1.0
+  
   const flyElecMult    = (def.flyState?.flying && move.type === "번개") ? 1.2 : 1.0
   const twisterFlyMult = (move.twister && def.flyState?.flying) ? 1.2 : 1.0
   const digEarthMult   = (def.digState?.digging && move.type === "지진") ? 1.2 : 1.0
 
   const critRate = Math.min(100, atkStat * 2 + (move.highCrit ? 3 : 0))
   const critical = Math.random() * 100 < critRate
-  const finalDmg = Math.floor(baseDmg * screenMult * flyElecMult * twisterFlyMult * digEarthMult)
+  const finalDmg = Math.floor(baseDmg * flyElecMult * twisterFlyMult * digEarthMult)
   return { damage: critical ? Math.floor(finalDmg * 1.5) : finalDmg, multiplier: mult, stab, critical, dice }
 }
 
@@ -238,11 +238,16 @@ function handleSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, entr
     return { handled: true }
   }
 
-  if (moveInfo.lightScreen) {
-    myPkmn.lightScreenTurns = 5
+if (moveInfo.lightScreen) {
+  const key = `lightScreen_team${teamOf(mySlot)}`
+  if ((data[key] ?? 0) > 0) {
+    logEntries.push(makeLog("normal", `이미 빛의 장막이 쳐져 있다!`))
+  } else {
+    data[key] = 5
     logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 빛의 장막을 쳤다!`))
-    return { handled: true }
   }
+  return { handled: true }
+}
 
   if (moveInfo.haze) {
     const resetR = (p) => {
@@ -369,8 +374,8 @@ function handleSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, entr
     logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 모든 것을 바쳤다!`))
     logEntries.push(makeLog("hp", "", { slot: mySlot, hp: 0, maxHp: myPkmn.maxHp }))
     logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
-    applyRankChanges({ targetAtk: -2, turns: 2 }, myPkmn, tPkmn, null, logEntries)
-    return { handled: true }
+     applyRankChanges({ targetAtk: -2, turns: 2 }, myPkmn, tPkmn, null, logEntries)
+    return { handled: true, memento: true }
   }
 
   if (moveInfo.futureSight) {
@@ -752,10 +757,10 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
     const afterDef = Math.max(0, raw - (tPkmn.defense ?? 3) * 5)
     const defRankEne = getActiveRankVal(tPkmn, "def")
     const baseDmg  = Math.max(0, afterDef - defRankEne * 3)
-    const screenMult = (tPkmn.lightScreenTurns ?? 0) > 0 && !move.breakBarrier ? 0.75 : 1.0
+  
     const critRate = Math.min(100, (myPkmn.defense ?? 3) * 2)
     const critical = Math.random() * 100 < critRate
-    const finalDmg = Math.floor(baseDmg * screenMult)
+    const finalDmg = Math.floor(baseDmg * flyElecMult * twisterFlyMult * digEarthMult)
     const damage   = critical ? Math.floor(finalDmg * 1.5) : finalDmg
     dealDamage(damage, mult, critical, tSlot, tPkmn)
     return { handled: true, damage }
@@ -1032,6 +1037,12 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, update = {
       if (data[k] !== undefined) finalUpdate[k] = data[k]
     })
   })
+
+   ;["A","B"].forEach(team => {
+    const k = `lightScreen_team${team}`
+    if (data[k] !== undefined) finalUpdate[k] = data[k]
+  })
+  
   const winTeam = checkWin(entries)
   if (winTeam) {
     finalUpdate.game_over      = true
@@ -1267,6 +1278,19 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
         // ── 비공격 기술
         const specialResult = handleSpecialNonAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
+         if (specialResult.memento) {
+          const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
+          await writeLogs(roomId, logEntries)
+          await roomRef.update({
+            ...buildEntryUpdate(entries),
+            current_order: [mySlot, ...(data.current_order ?? []).slice(1)],
+            turn_count: data.turn_count ?? 1,
+            turn_started_at: data.turn_started_at,
+            [`force_switch_${mySlot}`]: canSwitch,
+          })
+          return res.status(200).json({ ok: true })
+        }
+
         if (!specialResult.handled) {
           const r            = moveInfo?.rank
           const targetsEnemy = (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
@@ -1353,6 +1377,10 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
           }
 
           let { damage, multiplier, critical, dice } = calcDamage(myPkmn, moveData.name, tPkmn, powerOverride, null, aoeDice)
+          const defTeam = teamOf(tSlot)
+if (!moves[moveData.name]?.breakBarrier && (data[`lightScreen_team${defTeam}`] ?? 0) > 0) {
+  damage = Math.floor(damage * 0.75)
+}
           if (!isAoe) logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
           if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); continue }
 
@@ -1390,10 +1418,13 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
           if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
           if (isRequester && assistUsedThisTurn) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
 
-          if (moveInfo?.breakBarrier && (tPkmn.lightScreenTurns ?? 0) > 0) {
-            tPkmn.lightScreenTurns = 0
-            logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "의")} 빛의 장막이 깨졌다!`))
-          }
+          if (moveInfo?.breakBarrier) {
+  const lsKey = `lightScreen_team${teamOf(tSlot)}`
+  if ((data[lsKey] ?? 0) > 0) {
+    data[lsKey] = 0
+    logEntries.push(makeLog("normal", `빛의 장막이 깨졌다!`))
+  }
+}
 
           if (moveInfo?.rapidSpin && myPkmn.seeded) {
             myPkmn.seeded     = false
@@ -1543,6 +1574,11 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
     })
   })
 
+    ;["A","B"].forEach(team => {
+    const k = `lightScreen_team${team}`
+    if (data[k] !== undefined) update[k] = data[k]
+  })
+
   const winTeam = checkWin(entries)
   if (winTeam) {
     update.game_over       = true
@@ -1588,6 +1624,17 @@ if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
         pkmn.throatChopped--
         if (!pkmn.throatChopped)
           eotLogEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 다시 소리를 낼 수 있게 됐다!`))
+      }
+    })
+
+    ;["A","B"].forEach(team => {
+      const k = `lightScreen_team${team}`
+      if ((data[k] ?? 0) > 0) {
+        data[k]--
+        if (data[k] <= 0) {
+          data[k] = 0
+          eotLogEntries.push(makeLog("normal", `빛의 장막이 사라졌다!`))
+        }
       }
     })
 
