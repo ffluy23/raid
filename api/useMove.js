@@ -1804,16 +1804,17 @@ const chargedMult = (myPkmn.charged && moves[moveData.name]?.type === "전기") 
       update.weatherTurns = data.weatherTurns ?? 0
     }
 
-    ;["A","B"].forEach(team => {
-      const k = `lightScreen_team${team}`
-      if ((data[k] ?? 0) > 0) {
-        data[k]--
-        if (data[k] <= 0) {
-          data[k] = 0
-          eotLogEntries.push(makeLog("normal", `빛의 장막이 사라졌다!`))
-        }
-      }
-    })
+   ;["A","B"].forEach(team => {
+  const k = `lightScreen_team${team}`
+  if ((data[k] ?? 0) > 0) {
+    data[k]--
+    if (data[k] <= 0) {
+      data[k] = 0
+      eotLogEntries.push(makeLog("normal", `빛의 장막이 사라졌다!`))
+    }
+  }
+  update[k] = data[k] ?? 0  // ← 추가
+})
 
     if (eotLogEntries.length > 0) {
       Object.assign(update, buildEntryUpdate(entries))
