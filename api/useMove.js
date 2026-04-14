@@ -15,6 +15,7 @@ import {
   startWeather, getWeatherLog, applyWeatherDamage,
   tickWeather, endWeather, getWeatherDamageMult,
   patchMoveForWeather, getSunnyGrowthBonus
+  
 } from "../lib/weather.js"
 
 function makeLog(type, text = "", meta = null) {
@@ -1372,8 +1373,11 @@ ALL_FS.forEach(s => {
       if (!myPkmn.usedMoves) myPkmn.usedMoves = []
       if (!myPkmn.usedMoves.includes(moveData.name)) myPkmn.usedMoves.push(moveData.name)
 
-      const moveInfo = moves[moveData.name]
-      if (moveInfo) moveInfo._name = moveData.name
+      const moveInfoRaw = moves[moveData.name]
+if (moveInfoRaw) moveInfoRaw._name = moveData.name
+const moveInfo = moveInfoRaw
+  ? { ...moveInfoRaw, ...patchMoveForWeather(data.weather ?? null, moveData.name, moveInfoRaw) }
+  : null
       logEntries.push(makeLog("move_announce", `${myPkmn.name}의 ${moveData.name}!`))
 
       const tSlots = targetSlots ?? []
