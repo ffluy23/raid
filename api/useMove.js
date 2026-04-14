@@ -174,7 +174,7 @@ function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = 
   const raw      = Math.floor(base * mult * (stab ? 1.3 : 1))
   const atkRank  = getActiveRankVal(atk, "atk")
   const afterAtk = Math.max(0, raw + atkRank)
- const afterDef = afterAtk - getBaseStat(def, "def") * 5
+ const afterDef = afterAtk - getBaseStat(def, "def") * 3
   const defRank  = ignoreDefRank ? 0 : getActiveRankVal(def, "def")
 const baseDmg  = afterDef - defRank * 3
 
