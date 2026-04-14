@@ -295,7 +295,7 @@ if (moveInfo.lightScreen) {
       if (!hit) {
         logEntries.push(makeLog("normal", hitType === "evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
       } else {
-        applyStatus(tPkmn, moveInfo.effect?.status ?? "독").forEach(...)
+        applyStatus(tPkmn, moveInfo.effect?.status ?? "독").forEach(m => logEntries.push(makeLog("normal", m)))
       }
     }
     return { handled: true }
