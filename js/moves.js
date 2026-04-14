@@ -320,7 +320,7 @@ export const moves = {
                     effect: { chance: 0.3, volatile: "풀죽음" } },
   "암타":         { power: 40, type: "악", accuracy: 100, alwaysHit: false, effect: null },
   "세차게휘두르기":{ power: 40, type: "악", accuracy: 100, alwaysHit: false, effect: null, aoe: true },
-  "바크아웃":     { power: 0,  type: "악", accuracy: 95,  alwaysHit: false, effect: null,
+  "바크아웃":     { power: 40,  type: "악", accuracy: 95,  alwaysHit: false, effect: null,
                     rank: { targetAtk: -1, turns: 3 }, aoeEnemy: true },
   "거짓울음":     { power: 0,  type: "악", accuracy: 100, alwaysHit: false, effect: null,
                     rank: { targetDef: -2, turns: 2 } },
