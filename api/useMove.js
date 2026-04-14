@@ -287,7 +287,7 @@ if (moveInfo.lightScreen) {
     if (!tPkmn || tPkmn.hp <= 0) return { handled: true }
     const eneTypes = Array.isArray(tPkmn.type) ? tPkmn.type : [tPkmn.type]
     if (eneTypes.includes("풀")) {
-      logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} 독가루에 걸리지 않는다!`))
+      logEntries.push(makeLog("normal", `${tPkmn.name}${josa(tPkmn.name, "은는")} ${moveName}에 걸리지 않는다!`))
     } else if (tPkmn.status) {
       logEntries.push(makeLog("normal", `그러나 ${tPkmn.name}${josa(tPkmn.name, "은는")} 이미 상태이상이다!`))
     } else {
@@ -295,7 +295,7 @@ if (moveInfo.lightScreen) {
       if (!hit) {
         logEntries.push(makeLog("normal", hitType === "evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
       } else {
-        applyStatus(tPkmn, "독").forEach(m => logEntries.push(makeLog("normal", m)))
+        applyStatus(tPkmn, moveInfo.effect?.status ?? "독").forEach(...)
       }
     }
     return { handled: true }
