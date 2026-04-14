@@ -84,7 +84,7 @@ export const moves = {
                       rank: { targetAtk: -1, turns: 2 } },
   "불꽃튀기기":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null, sparks: true  },
   "화염방사":       { power: 50, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
-  "열사의대지":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "화상" } },
+  "열사의대지":     { power: 40, type: "땅", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "화상" } },
   "플레어드라이브": { power: 70, type: "불", accuracy: 100, alwaysHit: false, effect: { recoil: 0.33, chance: 0.1, status: "화상" } },
   "오버히트":   { power: 70, type: "불", accuracy: 100, alwaysHit: false, effect: null, targetSelf:true, rank: { atk: -1, turns: 3 } },
 
