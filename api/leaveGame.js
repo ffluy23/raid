@@ -62,6 +62,8 @@ export default async function handler(req, res) {
     force_switch_p4: false,
     lightScreen_teamA: 0,
 lightScreen_teamB: 0,
+weather: null,
+weatherTurns: 0,
   })
 
   return res.status(200).json({ ok: true })
