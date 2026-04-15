@@ -861,7 +861,8 @@ if (moveInfo.dig && !myPkmn.digState?.digging) {
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 혼란에 빠졌다!`))
       }
     } else {
-      myPkmn.outrageState = { active: true, turn: currentTurn + 1, maxTurn, moveName }
+    // isFirst인 경우도 저장되게 outrage 첫 턴 처리에서
+myPkmn.outrageState = { active: true, turn: currentTurn + 1, maxTurn, moveName, targetSlot: tSlot }
       if (!outrageInfo.confusion) {
         logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 소란을 피우고 있다!`))
       }

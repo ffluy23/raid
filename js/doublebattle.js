@@ -1014,16 +1014,17 @@ function listenRoom() {
           }
 
           // outrageState 자동발동
-          if (myActivePkmn?.outrageState?.active) {
-            const outrageMoveIdx = (myActivePkmn.moves ?? [])
-              .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
-            if (outrageMoveIdx !== -1) {
-              actionDone = true
-              _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: [] })
-                .catch(e => { console.warn("아우트레이지 자동처리 오류:", e.message); actionDone = false })
-              return
-            }
-          }
+         if (myActivePkmn?.outrageState?.active) {
+  const outrageMoveIdx = (myActivePkmn.moves ?? [])
+    .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
+  if (outrageMoveIdx !== -1) {
+    const targetSlot = myActivePkmn.outrageState.targetSlot ?? null
+    actionDone = true
+    _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: targetSlot ? [targetSlot] : [] })
+      .catch(e => { console.warn("아우트레이지 자동처리 오류:", e.message); actionDone = false })
+    return
+  }
+}
 
          if (!actionDone && (needsAutoMove || needsAutoFly || needsAutoDig || needsAutoDive || myActivePkmn?.hyperBeamState)) {
             actionDone = true
