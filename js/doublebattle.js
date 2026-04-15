@@ -559,6 +559,18 @@ let pendingMoveIdx = -1
 
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
+   if (moveInfo?.outrage) {
+    const enemies = enemySlotsOf(mySlot).filter(s => {
+      const ai = data[`${s}_active_idx`] ?? 0
+      const p  = data[`${s}_entry`]?.[ai]
+      return p && p.hp > 0
+    })
+    const target = enemies.length > 0
+      ? enemies[Math.floor(Math.random() * enemies.length)]
+      : null
+    doUseMove(idx, target ? [target] : [], data)
+    return
+  }
   if (moveInfo?.aoe) {
     const aoeTargets = ["p1","p2","p3","p4"].filter(s => {
       if (s === mySlot) return false
