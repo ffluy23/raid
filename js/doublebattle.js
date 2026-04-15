@@ -1014,7 +1014,7 @@ function listenRoom() {
           }
 
           // outrageState 자동발동
-        if (myActivePkmn?.outrageState?.active) {
+       if (myActivePkmn?.outrageState?.active) {
   const outrageMoveIdx = (myActivePkmn.moves ?? [])
     .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
   if (outrageMoveIdx !== -1) {
@@ -1023,9 +1023,12 @@ function listenRoom() {
       const p  = data[`${s}_entry`]?.[ai]
       return p && p.hp > 0
     })
+    const target = enemies.length > 0
+      ? enemies[Math.floor(Math.random() * enemies.length)]
+      : null
     actionDone = true
-    _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: enemies })
-      .catch(e => { console.warn("아우트레이지 자동처리 오류:", e.message); actionDone = false })
+    _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: target ? [target] : [] })
+      .catch(e => { console.warn("역린 자동처리 오류:", e.message); actionDone = false })
     return
   }
 }
