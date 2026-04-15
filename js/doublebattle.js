@@ -1014,13 +1014,17 @@ function listenRoom() {
           }
 
           // outrageState 자동발동
-         if (myActivePkmn?.outrageState?.active) {
+        if (myActivePkmn?.outrageState?.active) {
   const outrageMoveIdx = (myActivePkmn.moves ?? [])
     .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
   if (outrageMoveIdx !== -1) {
-    const targetSlot = myActivePkmn.outrageState.targetSlot ?? null
+    const enemies = enemySlotsOf(mySlot).filter(s => {
+      const ai = data[`${s}_active_idx`] ?? 0
+      const p  = data[`${s}_entry`]?.[ai]
+      return p && p.hp > 0
+    })
     actionDone = true
-    _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: targetSlot ? [targetSlot] : [] })
+    _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: enemies })
       .catch(e => { console.warn("아우트레이지 자동처리 오류:", e.message); actionDone = false })
     return
   }
