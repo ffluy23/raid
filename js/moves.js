@@ -190,7 +190,7 @@ export const moves = {
   "독찌르기": { power: 50, type: "독", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "독" } },
   "독가루":   { power: 0,  type: "독", accuracy: 75,  alwaysHit: false, targetSelf: false,
                 effect: { chance: 1, status: "독" }, poisonPowder: true },
-  "오물폭탄": { power: 50, type: "독", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "독" } },
+  "오물폭탄": { power: 50, type: "독", accuracy: 100, alwaysHit: false, effect: { chance: 0.3, status: "독" }, aoeEnemy: true },
   "오물웨이브":{ power: 50, type: "독", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "독" }, aoe: true },
   "맹독":     { power: 0,  type: "독", accuracy: 90,  alwaysHit: false, targetSelf: false, effect: { chance: 1, status: "독" } },
   "똬리틀기": { power: 0,  type: "독", accuracy: 100, alwaysHit: true,  targetSelf: true, effect: null,
