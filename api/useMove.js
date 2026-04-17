@@ -1653,10 +1653,7 @@ export default async function handler(req, res) {
     }  // if (!conf.selfHit) 끝
 
     clearRankStack(myPkmn)
-    if ((myPkmn.defendTurns ?? 0) > 0) {
-      myPkmn.defendTurns--
-      if (myPkmn.defendTurns <= 0) { myPkmn.defending = false; myPkmn.defendTurns = 0 }
-    }
+  
   }  // if (!pre.blocked) 끝
 
   if (isRequester) {

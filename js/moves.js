@@ -370,7 +370,9 @@ export const moves = {
   "달빛":           { power: 0,  type: "페어리", accuracy: 100, alwaysHit: true,
                       effect: { moonlight: true }, targetSelf: true },
   "매혹의보이스":   { power: 50, type: "페어리", accuracy: 100, alwaysHit: false, effect: null, enchantedVoice: true },
-
+  "데코레이션": { power: 0, type: "페어리", accuracy: 100, alwaysHit: true,
+                effect: null, targetSelf: false, decoration: true,
+                rank: { targetAtk: 2, turns: 2 } },
   // ───── 날씨 ─────
   "쾌청":     { power: 0, type: "불",   accuracy: 100, alwaysHit: true, effect: { weather: "쾌청",    weatherTurns: 5 } },
   "비바라기": { power: 0, type: "물",   accuracy: 100, alwaysHit: true, effect: { weather: "비",       weatherTurns: 5 } },

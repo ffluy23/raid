@@ -226,7 +226,7 @@ function triggerAutoAction(data) {
     moveInfo.power
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo.roar || moveInfo.leechSeed || moveInfo.chainBind
-    || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder
+    || moveInfo.dragonTail || moveInfo.healPulse || moveInfo.poisonPowder || moveInfo.decoration
     || moveInfo.pollenPuff || moveInfo.curse || moveInfo.ghostDive|| moveInfo.memento || moveInfo.taunt
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
@@ -598,7 +598,7 @@ function onMoveClick(idx, moveInfo, data) {
     || moveInfo?.pollenPuff || moveInfo?.curse
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
     || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
-  const targetsAlly = moveInfo?.healPulse || moveInfo?.pollenPuff
+  const targetsAlly = moveInfo?.healPulse || moveInfo?.pollenPuff || moveInfo?.decoration
 
   if (targetsEnemy || targetsAlly) {
     enterTargetMode(idx, data, { targetsEnemy: !!targetsEnemy, targetsAlly: !!targetsAlly })
