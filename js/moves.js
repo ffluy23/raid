@@ -78,7 +78,7 @@ export const moves = {
   "니트로차지":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null, rank: { spd: 1, turns: 3 } },
   "불꽃세례":       { power: 30, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상", thawEnemy: true } },
   "도깨비불":       { power: 0,  type: "불", accuracy: 85,  alwaysHit: false, targetSelf: false, effect: { chance: 1, status: "화상" } },
-  "열풍":           { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" }, aoeEnemy: true },
+  "열풍":           { power: 50, type: "불", accuracy: 90, alwaysHit: false, effect: { chance: 0.1, status: "화상" }, aoeEnemy: true },
   "불대문자":       { power: 40, type: "불", accuracy: 85,  alwaysHit: false, effect: null },
   "매지컬플레임":   { power: 45, type: "불", accuracy: 100, alwaysHit: false, effect: null,
                       rank: { targetAtk: -1, turns: 2 } },
