@@ -1059,6 +1059,23 @@ export default async function handler(req, res) {
   }
 
   await roomRef.update(update)
+
+    // 독침붕 전멸 체크
+  const allBeedrilDead = (data.Beedrill ?? []).length > 0 && (data.Beedrill ?? []).every(b => b.hp <= 0)
+  if (allBeedrilDead) {
+    const newKillCount = (data.boss_state?.beedrillKillCount ?? 0) + 1
+    data.boss_state = {
+      ...(data.boss_state ?? {}),
+      step: "recharge",
+      beedrillKillCount: newKillCount,
+    }
+    data.Beedrill = []
+    await roomRef.update({
+      boss_state: data.boss_state,
+      Beedrill: [],
+    })
+  }
+  
   await runBossIfNext(roomId, data, entries).catch(e => console.warn("보스 연속 처리 오류:", e.message))
 
   return res.status(200).json({ ok: true })
