@@ -121,18 +121,39 @@ export default async function handler(req, res) {
   ]
 
   // ── 기절 교체 or 유턴 강제교체: 턴 소모 없음 ────────────────
-  if (isFainted || isForceSwitch) {
-    await writeLogs(roomId, logs)
-    await roomRef.update({
+ if (isFainted || isForceSwitch) {
+    // 유턴 강제교체는 턴을 소모함 (current_order 앞에서 제거)
+    const newOrder  = isForceSwitch ? order.slice(1) : order
+    const isEot     = newOrder.length === 0
+
+    const update = {
       ...buildEntryUpdate(entries),
-      [`${mySlot}_active_idx`]:    newIdx,
-      [`force_switch_${mySlot}`]:  false,
-      turn_started_at:             Date.now(),  // onSnapshot 트리거용
+      [`${mySlot}_active_idx`]:   newIdx,
+      [`force_switch_${mySlot}`]: false,
+      current_order:   newOrder,
+      turn_count:      isForceSwitch ? (data.turn_count ?? 1) + 1 : (data.turn_count ?? 1),
+      turn_started_at: newOrder.length > 0 ? Date.now() : null,
+    }
+
+    PLAYER_SLOTS.forEach(s => {
+      if (data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`]
     })
+    update[`${mySlot}_active_idx`] = newIdx
 
-    // 교체 후에도 보스 턴이면 연속 처리
+    if (isEot) {
+      const result = checkRaidWin(entries, data.boss_current_hp ?? 0)
+      if (result) {
+        update.game_over     = true
+        update.raid_result   = result
+        update.current_order = []
+        update.turn_started_at = null
+      }
+      update.boss_current_hp = data.boss_current_hp ?? 0
+    }
+
+    await writeLogs(roomId, logs)
+    await roomRef.update(update)
     await runBossIfNext(roomId).catch(e => console.warn("보스 연속 처리 오류:", e.message))
-
     return res.status(200).json({ ok: true })
   }
 

@@ -1175,11 +1175,14 @@ export default async function handler(req, res) {
       if (!moveInfo?.power) {
         const specialResult = handleRaidSpecialNonAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
-        if (!specialResult.handled) {
-          // 랭크 변화 등 기본 처리
-          applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
-          applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
-        }
+       if (!specialResult.handled) {
+  if (moveInfo?.targetSelf === false) {
+    logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
+  } else {
+    applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
+    applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+  }
+}
 
       } else {
         // ── 공격 기술 ────────────────────────────────────────────
