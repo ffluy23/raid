@@ -88,6 +88,11 @@ onAuthStateChanged(auth, async user => {
   }
 
   const snap = await getDoc(roomRef)
+  if (!snap.exists()) {
+    console.warn("raid 문서 없음:", ROOM_ID)
+    await skipIntro()
+    return
+  }
   const room = snap.data()
   mySlot = resolveMySlot(room, myUid)
 
@@ -128,7 +133,13 @@ async function onTouched() {
   }
 
   // Firestore에 내 인트로 ready 마킹
-  await updateDoc(roomRef, { [`intro_ready_${mySlot}`]: true })
+  if (mySlot) {
+    await updateDoc(roomRef, { [`intro_ready_${mySlot}`]: true })
+  } else {
+    // 슬롯을 못 찾은 경우 (관전자 or 문서 불일치) → 바로 배틀 화면으로
+    await skipIntro()
+    return
+  }
 
   // 상태 메시지
   const prompt = document.getElementById("touch-prompt")
