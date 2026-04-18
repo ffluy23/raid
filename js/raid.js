@@ -968,17 +968,18 @@ function listenRoom() {
       }
     }
 
-    // 기절 시 즉시 교체 버튼 활성화
-    if (!isSpectator && !data.game_over && mySlot) {
-      const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
-      const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-      const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
-      const hasAlive     = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
-      if (isFainted && hasAlive) {
-        updateBenchButtons(data)
-        updateTurnUI(data)
-      }
-    }
+    // 기절 시 즉시 교체 버튼 활성화 (단, 내 턴이거나 forceSwitch일 때만)
+if (!isSpectator && !data.game_over && mySlot) {
+  const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
+  const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
+  const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
+  const hasAlive     = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
+  const forceSwitch  = !!data[`force_switch_${mySlot}`]
+  if (isFainted && hasAlive && (forceSwitch || myTurn)) {
+    updateBenchButtons(data)
+    updateTurnUI(data)
+  }
+}
 
     if (data.dice_event && data.dice_event.ts > lastDiceEventTs) {
       if (!isProcessing && logQueue.length === 0) {
