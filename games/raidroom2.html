@@ -35,9 +35,15 @@ body {
   font-family: 'Mona12', sans-serif;
 }
 
+.battle{
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+}
+
 #battle-wrapper {
   background-color: #fff;
-  width: 1020px; max-width: 99vw;
+  width: 930px; max-width: 99vw;
   padding: 16px; box-sizing: border-box;
   border: 1px solid #444; border-radius: 12px;
 }
@@ -68,6 +74,99 @@ body {
   gap: 16px;
   align-items: center;
 }
+
+/* ══ 독침붕 영역 ══ */
+#beedrill-row {
+  display: none; /* 소환 전 숨김 */
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1.5px dashed #c0a020;
+  border-radius: 10px;
+  background: rgba(192,160,32,0.04);
+  animation: beedrillAppear 0.4s ease;
+}
+#beedrill-row.visible { display: flex; }
+@keyframes beedrillAppear {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+#beedrill-row-label {
+  font-size: 10px; font-weight: bold;
+  color: #c0a020; letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#beedrill-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* 독침붕 카드 */
+.beedrill-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 7px;
+  border: 1.5px solid #c0a020;
+  border-radius: 12px;
+  background: rgba(192,160,32,0.04);
+  transition: opacity 0.4s, border-color 0.3s;
+}
+.beedrill-card.fainted {
+  opacity: 0.35;
+  border-color: #aaa;
+  border-style: dashed;
+}
+
+/* 독침붕 초상화 */
+.beedrill-portrait-wrap {
+  position: relative;
+  width: 48px; height: 48px;
+  flex-shrink: 0;
+}
+.beedrill-portrait-placeholder {
+  position: absolute; inset: 0;
+  background: #282B42; border-radius: 5px;
+}
+.beedrill-portrait-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain; border-radius: 5px;
+  display: none; opacity: 0; transition: opacity .35s;
+}
+.beedrill-portrait-img.visible { display: block; opacity: 1; }
+
+/* 독침붕 정보 */
+.beedrill-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.beedrill-info-top {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.beedrill-name   { font-size: 11px; font-weight: bold; color: #7a6000; }
+.beedrill-hp-num { font-size: 10px; color: #555; white-space: nowrap; }
+.beedrill-hp-bar-wrap {
+  width: 100%; background: rgba(0,0,0,0.12);
+  border-radius: 999px; height: 6px; overflow: hidden;
+}
+.beedrill-hp-bar {
+  height: 100%; background: #c0a020;
+  border-radius: 999px; width: 100%;
+  transition: width .5s, background-color .4s;
+}
+.beedrill-rank-tag { font-size: 9px; color: #888; min-height: 12px; }
+.beedrill-fainted-label {
+  display: none;
+  font-size: 9px; color: #aaa; font-style: italic;
+}
+.beedrill-card.fainted .beedrill-fainted-label { display: block; }
+.beedrill-card.fainted .beedrill-hp-bar-wrap   { display: none; }
+.beedrill-card.fainted .beedrill-rank-tag      { display: none; }
 
 /* 플레이어 + 가운데 행 */
 #player-row {
@@ -215,6 +314,55 @@ body {
   display: none;
   font-size: 11px; color: #e67e22; text-align: center;
   padding: 4px; border: 1px dashed #e67e22; border-radius: 6px; margin-top: 2px;
+}
+
+/* ── 독침붕 타겟 선택 힌트 ── */
+#beedrill-target-hint {
+  display: none;
+  font-size: 11px; color: #c0a020; text-align: center;
+  padding: 4px; border: 1px dashed #c0a020; border-radius: 6px; margin-top: 2px;
+}
+
+/* 독침붕 카드 타겟 선택 가능 상태 */
+.beedrill-card.targetable {
+  cursor: pointer;
+  border-color: #e67e22;
+  box-shadow: 0 0 0 2px rgba(230,126,34,0.3);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.beedrill-card.targetable:hover {
+  box-shadow: 0 0 0 3px rgba(230,126,34,0.5);
+  filter: brightness(1.05);
+}
+
+/* ── 가방 버튼 ── */
+#bag-btn {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; height: 34px;
+  background: transparent;
+  border: 1.5px solid #7a6a50;
+  border-radius: 8px;
+  color: #7a6a50;
+  font-size: 12px; font-family: inherit; font-weight: bold;
+  cursor: pointer;
+  position: relative;
+  transition: background .15s, color .15s, border-color .15s;
+}
+#bag-btn:not(:disabled):hover {
+  background: #7a6a50;
+  color: #fff;
+  border-color: #7a6a50;
+}
+#bag-btn:not(:disabled):hover svg path {
+  fill: #fff;
+}
+#bag-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+#bag-btn svg {
+  flex-shrink: 0;
+  transition: none;
 }
 
 /* ── 교체 버튼 ── */
@@ -403,9 +551,18 @@ body {
 #volume-control { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 
 /* 채팅 */
-#chat-section { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+#chat-section { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; 
+display: flex;
+  flex-direction: column;
+  width: 250px;
+  flex-shrink: 0; 
+height: 400px;
+}
 #chat-channel-label { font-size: 11px; color: #888; padding: 4px 8px; background: #f5f5f5; border-bottom: 1px solid #eee; }
-#chat-messages { height: 80px; overflow-y: auto; padding: 5px 8px; font-size: 12px; line-height: 1.5; }
+#chat-messages { flex: 1; overflow-y: auto; padding: 5px 8px; font-size: 12px; line-height: 1.5; 
+  height: 0;
+  min-height: 0;
+}
 .chat-message { margin: 1px 0; }
 .chat-nick    { font-weight: bold; color: #555; }
 .chat-action  { color: #999; font-style: italic; }
@@ -426,6 +583,8 @@ body {
     min-height: 100dvh; width: 100%; max-width: 100%;
     padding: 8px 6px 24px;
   }
+  .battle { flex-direction: column; }
+  #chat-section { width: 100%; height: 160px; }
   #boss-row-inner { grid-template-columns: 120px 1fr; gap: 10px; }
   .boss-portrait-wrap { max-width: 120px; }
   #player-row { grid-template-columns: 1fr; gap: 8px; }
@@ -439,6 +598,10 @@ body {
   #move-buttons button { height: 44px; font-size: 11px; }
   #battle-log { height: 90px; font-size: 11px; }
   .dice-num { font-size: 22px; }
+
+  /* 모바일: 독침붕 카드 세로 배치 */
+  #beedrill-cards { grid-template-columns: 1fr; }
+  .beedrill-portrait-wrap { width: 40px; height: 40px; }
 }
   </style>
 </head>
@@ -453,165 +616,225 @@ body {
 <div id="battle-wrapper">
   <div id="assist-anim">ASSIST!</div>
   <div id="sync-anim">SYNCHRONIZE!</div>
-  <div id="umbreon-anim">Override!</div>
+  <div id="umbreon-anim">OVERRIDE!</div>
+
+  <!-- 보스 -->
+  <div id="boss-row">
+    <div id="boss-row-inner">
+      <div id="boss-pokemon-area">
+        <p class="boss-label">BOSS</p>
+        <div class="boss-portrait-wrap">
+          <div class="boss-portrait-placeholder"></div>
+          <img id="boss-portrait" class="boss-portrait-img" alt="">
+        </div>
+      </div>
+      <div class="boss-hp-card">
+        <div class="boss-hp-card-top">
+          <span class="boss-name-label" id="boss-name">—</span>
+          <span class="boss-hp-number"  id="boss-hp-text">—</span>
+        </div>
+        <div class="hp-bar-wrap"><div class="hp-bar" id="boss-hp-bar" style="background:#e74c3c;"></div></div>
+        <div class="boss-status-tag" id="boss-status"></div>
+        <div class="boss-rank-tag"   id="boss-rank"></div>
+      </div>
+    </div>
+
+    <!-- ══ 독침붕 영역 (보스 행 아래, 평소엔 숨김) ══ -->
+    <div id="beedrill-row">
+      <div id="beedrill-row-label">독침붕</div>
+      <div id="beedrill-cards">
+
+        <!-- 독침붕 1 -->
+        <div class="beedrill-card" id="beedrill-card-0">
+          <div class="beedrill-portrait-wrap">
+            <div class="beedrill-portrait-placeholder"></div>
+            <img id="beedrill-portrait-0" class="beedrill-portrait-img" alt="독침붕">
+          </div>
+          <div class="beedrill-info">
+            <div class="beedrill-info-top">
+              <span class="beedrill-name">독침붕</span>
+              <span class="beedrill-hp-num" id="beedrill-hp-num-0">—</span>
+            </div>
+            <div class="beedrill-hp-bar-wrap">
+              <div class="beedrill-hp-bar" id="beedrill-hp-bar-0"></div>
+            </div>
+            <div class="beedrill-rank-tag" id="beedrill-rank-0"></div>
+            <div class="beedrill-fainted-label">쓰러짐</div>
+          </div>
+        </div>
+
+        <!-- 독침붕 2 -->
+        <div class="beedrill-card" id="beedrill-card-1">
+          <div class="beedrill-portrait-wrap">
+            <div class="beedrill-portrait-placeholder"></div>
+            <img id="beedrill-portrait-1" class="beedrill-portrait-img" alt="독침붕">
+          </div>
+          <div class="beedrill-info">
+            <div class="beedrill-info-top">
+              <span class="beedrill-name">독침붕</span>
+              <span class="beedrill-hp-num" id="beedrill-hp-num-1">—</span>
+            </div>
+            <div class="beedrill-hp-bar-wrap">
+              <div class="beedrill-hp-bar" id="beedrill-hp-bar-1"></div>
+            </div>
+            <div class="beedrill-rank-tag" id="beedrill-rank-1"></div>
+            <div class="beedrill-fainted-label">쓰러짐</div>
+          </div>
+        </div>
+
+      </div><!-- /beedrill-cards -->
+    </div><!-- /beedrill-row -->
+
+  </div><!-- /boss-row -->
+
+<div class="battle">
 
   <div id="battle-screen">
     <div id="battle-top">
 
-      <!-- 보스 -->
-      <div id="boss-row">
-        <div id="boss-row-inner">
-          <div id="boss-pokemon-area">
-            <p class="boss-label">BOSS</p>
-            <div class="boss-portrait-wrap">
-              <div class="boss-portrait-placeholder"></div>
-              <img id="boss-portrait" class="boss-portrait-img" alt="">
-            </div>
-          </div>
-          <div class="boss-hp-card">
-            <div class="boss-hp-card-top">
-              <span class="boss-name-label" id="boss-name">—</span>
-              <span class="boss-hp-number"  id="boss-hp-text">—</span>
-            </div>
-            <div class="hp-bar-wrap"><div class="hp-bar" id="boss-hp-bar" style="background:#e74c3c;"></div></div>
-            <div class="boss-status-tag" id="boss-status"></div>
-            <div class="boss-rank-tag"   id="boss-rank"></div>
-          </div>
-        </div>
-      </div>
-
       <!-- 플레이어 + 가운데 -->
       <div id="player-row">
-      <!-- 플레이어 3명 -->
-      <div id="player-cols">
+        <!-- 플레이어 3명 -->
+        <div id="player-cols">
 
-        <!-- 내 포켓몬 -->
-        <div class="pkmn-col" id="my-pokemon-area">
-          <p class="section-label" id="my-name-label">-</p>
-          <div class="portrait-wrap">
-            <div class="portrait-placeholder" id="my-portrait-placeholder"></div>
-            <img id="my-portrait" class="portrait-img" alt="">
-          </div>
-          <div class="hp-card my-card">
-            <div class="hp-card-top">
-              <span class="hp-card-name" id="my-active-name">-</span>
-              <span class="hp-card-number" id="my-active-hp"></span>
+          <!-- 내 포켓몬 -->
+          <div class="pkmn-col" id="my-pokemon-area">
+            <p class="section-label" id="my-name-label">-</p>
+            <div class="portrait-wrap">
+              <div class="portrait-placeholder" id="my-portrait-placeholder"></div>
+              <img id="my-portrait" class="portrait-img" alt="">
             </div>
-            <div class="hp-bar-wrap"><div class="hp-bar" id="my-hp-bar"></div></div>
-          </div>
-          <div>
-            <div id="move-buttons">
-              <button id="move-btn-0" disabled>-</button>
-              <button id="move-btn-1" disabled>-</button>
-              <button id="move-btn-2" disabled>-</button>
-              <button id="move-btn-3" disabled>-</button>
+            <div class="hp-card my-card">
+              <div class="hp-card-top">
+                <span class="hp-card-name" id="my-active-name">-</span>
+                <span class="hp-card-number" id="my-active-hp"></span>
+              </div>
+              <div class="hp-bar-wrap"><div class="hp-bar" id="my-hp-bar"></div></div>
             </div>
-            <div id="target-hint">⚔ 공격할 상대를 클릭!</div>
-            <div id="ally-target-popup" style="display:none;margin-top:4px;padding:6px 8px;border:1px dashed #27ae60;border-radius:6px;font-size:11px;color:#27ae60;">
-              💚 아군을 선택하세요
-              <div id="ally-target-buttons" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
-              <button id="ally-target-cancel" style="margin-top:4px;font-size:10px;padding:2px 8px;border:1px solid #aaa;border-radius:4px;background:transparent;cursor:pointer;color:#666;">취소</button>
+            <div>
+              <div id="move-buttons">
+                <button id="move-btn-0" disabled>-</button>
+                <button id="move-btn-1" disabled>-</button>
+                <button id="move-btn-2" disabled>-</button>
+                <button id="move-btn-3" disabled>-</button>
+              </div>
+              <!-- 보스 타겟 힌트 -->
+              <div id="target-hint">⚔ 공격할 상대를 클릭!</div>
+              <!-- 독침붕 타겟 힌트 (독침붕 살아있을 때) -->
+              <div id="beedrill-target-hint">독침붕을 선택!</div>
+              <div id="ally-target-popup" style="display:none;margin-top:4px;padding:6px 8px;border:1px dashed #27ae60;border-radius:6px;font-size:11px;color:#27ae60;">
+                💚 아군을 선택!
+                <div id="ally-target-buttons" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
+                <button id="ally-target-cancel" style="margin-top:4px;font-size:10px;padding:2px 8px;border:1px solid #aaa;border-radius:4px;background:transparent;cursor:pointer;color:#666;">취소</button>
+              </div>
             </div>
-          </div>
-          <div>
-            <p class="section-label">교체</p>
-            <div id="forced-switch-hint">⚠ 교체할 포켓몬을 선택!</div>
-            <div id="bench-container"></div>
-          </div>
-          <button id="leaveBtn">방 나가기</button>
-        </div>
 
-        <!-- 아군1 -->
-        <div class="pkmn-col" id="ally1-pokemon-area">
-          <p class="section-label" id="ally1-name-label">-</p>
-          <div class="portrait-wrap">
-            <div class="portrait-placeholder" id="ally1-portrait-placeholder"></div>
-            <img id="ally1-portrait" class="portrait-img" alt="">
-          </div>
-          <div class="hp-card ally1-card">
-            <div class="hp-card-top">
-              <span class="hp-card-name" id="ally1-active-name">-</span>
-              <span class="hp-card-number" id="ally1-active-hp"></span>
+            <!-- 가방 버튼 -->
+            <button id="bag-btn" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+                <path fill="#7a6a50" d="M17 4.14V2h-3v2h-4V2H7v2.14c-1.72.45-3 2-3 3.86v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.86-1.28-3.41-3-3.86M18 20H6V8c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2zm-1.5-8v4h-2v-2h-7v-2z"/>
+              </svg>
+              가방
+            </button>
+
+            <div>
+              <p class="section-label">교체</p>
+              <div id="forced-switch-hint">⚠ 교체할 포켓몬을 선택!</div>
+              <div id="bench-container"></div>
             </div>
-            <div class="hp-bar-wrap"><div class="hp-bar" id="ally1-hp-bar"></div></div>
+            <button id="leaveBtn">방 나가기</button>
           </div>
-          <div class="help-btn">
-            <div id="assist-section">
-              <button id="assist-request-btn" onclick="window.__doRequestAssist()">지원 요청</button>
-              <div id="assist-status"></div>
-              <div id="assist-popup" style="display:none">
-                <div><span id="assist-popup-name"></span>님의 지원 요청 <span id="assist-agree-count"></span></div>
-                <div style="display:flex;gap:4px;">
-                  <button onclick="window.__doAgreeAssist()">동의</button>
-                  <button onclick="window.__doRejectAssist()">거절</button>
+
+          <!-- 아군1 -->
+          <div class="pkmn-col" id="ally1-pokemon-area">
+            <p class="section-label" id="ally1-name-label">-</p>
+            <div class="portrait-wrap">
+              <div class="portrait-placeholder" id="ally1-portrait-placeholder"></div>
+              <img id="ally1-portrait" class="portrait-img" alt="">
+            </div>
+            <div class="hp-card ally1-card">
+              <div class="hp-card-top">
+                <span class="hp-card-name" id="ally1-active-name">-</span>
+                <span class="hp-card-number" id="ally1-active-hp"></span>
+              </div>
+              <div class="hp-bar-wrap"><div class="hp-bar" id="ally1-hp-bar"></div></div>
+            </div>
+            <div class="help-btn">
+              <div id="assist-section">
+                <button id="assist-request-btn" onclick="window.__doRequestAssist()">지원 요청</button>
+                <div id="assist-status"></div>
+                <div id="assist-popup" style="display:none">
+                  <div><span id="assist-popup-name"></span>님의 지원 요청 <span id="assist-agree-count"></span></div>
+                  <div style="display:flex;gap:4px;">
+                    <button onclick="window.__doAgreeAssist()">동의</button>
+                    <button onclick="window.__doRejectAssist()">거절</button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- 아군2 -->
-        <div class="pkmn-col" id="ally2-pokemon-area">
-          <p class="section-label" id="ally2-name-label">-</p>
-          <div class="portrait-wrap">
-            <div class="portrait-placeholder" id="ally2-portrait-placeholder"></div>
-            <img id="ally2-portrait" class="portrait-img" alt="">
-          </div>
-          <div class="hp-card ally2-card">
-            <div class="hp-card-top">
-              <span class="hp-card-name" id="ally2-active-name">-</span>
-              <span class="hp-card-number" id="ally2-active-hp"></span>
+          <!-- 아군2 -->
+          <div class="pkmn-col" id="ally2-pokemon-area">
+            <p class="section-label" id="ally2-name-label">-</p>
+            <div class="portrait-wrap">
+              <div class="portrait-placeholder" id="ally2-portrait-placeholder"></div>
+              <img id="ally2-portrait" class="portrait-img" alt="">
             </div>
-            <div class="hp-bar-wrap"><div class="hp-bar" id="ally2-hp-bar"></div></div>
-          </div>
-          <div class="help-btn">
-            <div id="sync-section">
-              <button id="sync-request-btn" onclick="window.__doRequestSync()">싱크로 요청</button>
-              <div id="sync-status"></div>
-              <div id="sync-popup" style="display:none">
-                <div><span id="sync-popup-name"></span>님의 싱크로 요청</div>
-                <div style="display:flex;gap:4px;">
-                  <button onclick="window.__doAgreeSync()">동의</button>
-                  <button onclick="window.__doRejectSync()">거절</button>
+            <div class="hp-card ally2-card">
+              <div class="hp-card-top">
+                <span class="hp-card-name" id="ally2-active-name">-</span>
+                <span class="hp-card-number" id="ally2-active-hp"></span>
+              </div>
+              <div class="hp-bar-wrap"><div class="hp-bar" id="ally2-hp-bar"></div></div>
+            </div>
+            <div class="help-btn">
+              <div id="sync-section">
+                <button id="sync-request-btn" onclick="window.__doRequestSync()">싱크로 요청</button>
+                <div id="sync-status"></div>
+                <div id="sync-popup" style="display:none">
+                  <div><span id="sync-popup-name"></span>님의 싱크로 요청</div>
+                  <div style="display:flex;gap:4px;">
+                    <button onclick="window.__doAgreeSync()">동의</button>
+                    <button onclick="window.__doRejectSync()">거절</button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-      </div><!-- /player-cols -->
+        </div><!-- /player-cols -->
 
-      <!-- 가운데: 턴 + 순서 + 주사위 -->
-      <div id="center-col">
-        <div id="turn-area">
-          <div id="turn-display">대기 중...</div>
-          <div id="turn-count"></div>
-          <div id="turn-timer" style="display:none; font-size:13px; font-weight:bold; margin-top:3px; font-variant-numeric:tabular-nums;"></div>
-        </div>
-        <div id="order-display"></div>
-        <div id="dice-wrap">
-          <div class="dice-row">
-            <div class="dice-box" id="dice-box-p1">
-              <span id="p1-dice-label">P1</span>
-              <div class="dice-num" id="dice-p1">?</div>
+        <!-- 가운데: 턴 + 순서 + 주사위 -->
+        <div id="center-col">
+          <div id="turn-area">
+            <div id="turn-display">대기 중...</div>
+            <div id="turn-count"></div>
+          </div>
+          <div id="order-display"></div>
+          <div id="dice-wrap">
+            <div class="dice-row">
+              <div class="dice-box" id="dice-box-p1">
+                <span id="p1-dice-label">P1</span>
+                <div class="dice-num" id="dice-p1">?</div>
+              </div>
+              <div class="dice-box" id="dice-box-p2">
+                <span id="p2-dice-label">P2</span>
+                <div class="dice-num" id="dice-p2">?</div>
+              </div>
             </div>
-            <div class="dice-box" id="dice-box-p2">
-              <span id="p2-dice-label">P2</span>
-              <div class="dice-num" id="dice-p2">?</div>
+            <div class="dice-row">
+              <div class="dice-box" id="dice-box-p3">
+                <span id="p3-dice-label">P3</span>
+                <div class="dice-num" id="dice-p3">?</div>
+              </div>
+              <div class="dice-box" id="dice-box-boss">
+                <span id="boss-dice-label">BOSS</span>
+                <div class="dice-num" id="dice-boss">?</div>
+              </div>
             </div>
           </div>
-          <div class="dice-row">
-            <div class="dice-box" id="dice-box-p3">
-              <span id="p3-dice-label">P3</span>
-              <div class="dice-num" id="dice-p3">?</div>
-            </div>
-            <div class="dice-box" id="dice-box-boss">
-              <span id="boss-dice-label">BOSS</span>
-              <div class="dice-num" id="dice-boss">?</div>
-            </div>
-          </div>
         </div>
-      </div>
 
       </div><!-- /player-row -->
 
@@ -630,34 +853,36 @@ body {
       </div>
     </div>
 
-    <!-- 채팅 -->
-    <div id="chat-section">
-      <div id="chat-channel-label">레이드 채팅</div>
-      <div id="chat-messages"></div>
-      <div id="chat-input-row">
-        <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
-        <button id="chat-send-btn">전송</button>
-      </div>
-    </div>
-
-    <!-- 관전자 채팅 -->
-    <div id="spectator-chat-section">
-      <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
-        <div style="font-size:11px;color:#888;padding:4px 8px;background:#f5f5f5;border-bottom:1px solid #eee;">관전자 채팅</div>
-        <div id="spectator-chat-messages"></div>
-        <div style="display:flex;border-top:1px solid #eee;">
-          <input id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200"
-            style="flex:1;border:none;padding:5px 8px;font-size:12px;outline:none;font-family:inherit;">
-          <button id="spectator-chat-send-btn"
-            style="border:none;background:#888;color:#fff;padding:0 12px;cursor:pointer;font-size:12px;">전송</button>
-        </div>
-      </div>
-    </div>
-
   </div><!-- /battle-screen -->
+
+  <!-- 채팅 -->
+  <div id="chat-section">
+    <div id="chat-channel-label">레이드 채팅</div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-row">
+      <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
+      <button id="chat-send-btn">전송</button>
+    </div>
+  </div>
+
+  <!-- 관전자 채팅 -->
+  <div id="spectator-chat-section">
+    <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <div style="font-size:11px;color:#888;padding:4px 8px;background:#f5f5f5;border-bottom:1px solid #eee;">관전자 채팅</div>
+      <div id="spectator-chat-messages"></div>
+      <div style="display:flex;border-top:1px solid #eee;">
+        <input id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200"
+          style="flex:1;border:none;padding:5px 8px;font-size:12px;outline:none;font-family:inherit;">
+        <button id="spectator-chat-send-btn"
+          style="border:none;background:#888;color:#fff;padding:0 12px;cursor:pointer;font-size:12px;">전송</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.battle -->
 </div><!-- /battle-wrapper -->
 
-<script>const ROOM_ID = "raidroom2"</script>
+<script>const ROOM_ID = "raidroom1"</script>
 <script type="module" src="../js/raidchat.js"></script>
 <script type="module" src="../js/raidintro.js"></script>
 <script type="module" src="../js/raid.js"></script>
