@@ -9,8 +9,7 @@ import {
   applyStatus, applyVolatile, tickVolatiles
 } from "../lib/effecthandler.js"
 import {
-  deepCopyEntries, corsHeaders, rollD10, getActiveRank,
-  patchMoveForWeather
+  deepCopyEntries, corsHeaders, rollD10
 } from "../lib/gameUtils.js"
 
 // ── 레이드 상수 ──────────────────────────────────────────────────────
