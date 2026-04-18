@@ -1,7 +1,6 @@
 // api/raidSkipTurn.js
 import { db } from "../lib/firestore.js"
 import { executeBossAction, deepCopyEntries as deepCopyRaidEntries2 } from "../lib/raidBossAction.js"
-import { executeBossAction, deepCopyEntries as deepCopyRaidEntries2 } from "../lib/raidBossAction.js"
 import { corsHeaders } from "../lib/gameUtils.js"
 
 const PLAYER_SLOTS = ["p1", "p2", "p3"]
@@ -47,17 +46,6 @@ async function runBossIfNext(roomId) {
   return executeBossAction(roomId, freshData, freshEntries, order)
 }
 
-
-// ── 보스 턴 연속 처리 ────────────────────────────────────────────────
-async function runBossIfNext(roomId) {
-  const snap = await db.collection("raid").doc(roomId).get()
-  const freshData = snap.data()
-  if (!freshData || freshData.game_over) return null
-  const order = freshData.current_order ?? []
-  if (order[0] !== "boss") return null
-  const freshEntries = deepCopyRaidEntries2(freshData)
-  return executeBossAction(roomId, freshData, freshEntries, order)
-}
 export default async function handler(req, res) {
   Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
   if (req.method === "OPTIONS") return res.status(200).end()
