@@ -82,6 +82,19 @@ export default async function handler(req, res) {
     // ── 이벤트 초기화 ────────────────────────────────────────
     dice_event: null,
     umbreon_used: false,
+    // ── 보스 스탯 초기화 ─────────────────────────────────────
+    boss_attack:    null,
+    boss_defense:   null,
+    boss_speed:     null,
+    boss_max_hp:    null,
+    boss_id:        null,
+    boss_name:      null,
+    boss_moves:     null,
+    boss_type:      null,
+    boss_ult:       null,
+
+    // ── 독침붕 초기화 ────────────────────────────────────────
+    Beedrill: [],
   })
 
   return res.status(200).json({ ok: true })

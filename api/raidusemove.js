@@ -866,10 +866,14 @@ export default async function handler(req, res) {
               logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
             }
             specialHandled = true
-          } else if (!specialHandled) {
-            applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
-            applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
-          }
+         } else if (!specialHandled) {
+  const effectTarget = moveInfo?.targetSelf === false ? fakeBoss : myPkmn
+  applyRankChanges(moveInfo?.rank ?? null, myPkmn, effectTarget, moveData.name, logEntries)
+  applyMoveEffect(moveInfo?.effect, myPkmn, effectTarget, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+  if (moveInfo?.targetSelf === false && fakeBoss.status !== (data.boss_status ?? null)) {
+    data.boss_status = fakeBoss.status
+  }
+}
         }
 
       } else {
