@@ -264,10 +264,12 @@ function enterBeedrillTargetMode(data) {
     const card = $(`beedrill-card-${i}`)
     if (!card || bee.hp <= 0) return
     card.classList.add("targetable")
-    card.onclick = () => {
-      exitBeedrillTargetMode(data)
-      doUseMove(pendingMoveIdx, [`beedrill_${i}`], data)
-    }
+   card.onclick = () => {
+  const idx = pendingMoveIdx
+  exitBeedrillTargetMode(data)
+  actionDone = false
+  doUseMove(idx, [`beedrill_${i}`], data)
+}
   })
 }
 
