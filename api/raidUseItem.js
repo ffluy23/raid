@@ -13,7 +13,7 @@ const PLAYER_SLOTS = ["p1", "p2", "p3"]
 export const ITEMS = {
   "회복약": {
     name: "회복약",
-    desc: "모든 상태이상을 없애고 HP를 완전히 회복한다!",
+    desc: "모든 상태이상을 없애고 HP를 완전히 회복한다.",
     // 기절한 포켓몬에는 사용 불가
     canUse: (pkmn) => pkmn.hp > 0,
     apply: (pkmn) => {
