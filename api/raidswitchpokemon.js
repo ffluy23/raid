@@ -127,7 +127,12 @@ export default async function handler(req, res) {
       ...buildEntryUpdate(entries),
       [`${mySlot}_active_idx`]:    newIdx,
       [`force_switch_${mySlot}`]:  false,
+      turn_started_at:             Date.now(),  // onSnapshot 트리거용
     })
+
+    // 교체 후에도 보스 턴이면 연속 처리
+    await runBossIfNext(roomId).catch(e => console.warn("보스 연속 처리 오류:", e.message))
+
     return res.status(200).json({ ok: true })
   }
 
