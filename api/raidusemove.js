@@ -5,7 +5,7 @@ import { moves } from "../lib/moves.js"
 import { getTypeMultiplier } from "../lib/typeChart.js"
 import {
   josa, applyMoveEffect, checkPreActionStatus,
-  checkConfusion, applyEndOfTurnDamage, getStatusSpdPenalty,
+  checkConfusion, getStatusSpdPenalty,
   applyStatus, applyVolatile, tickVolatiles
 } from "../lib/effecthandler.js"
 import {
@@ -358,9 +358,13 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
     }
 
     // 독/화상
-    applyEndOfTurnDamage(pkmn).forEach(m => eotLogs.push(makeLog("normal", m)))
-    if (pkmn.hp <= 0 && eotLogs.at(-1)?.type !== "faint")
-      eotLogs.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
+    if (pkmn.status === "독" || pkmn.status === "화상") {
+      const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 16))
+      pkmn.hp = Math.max(0, pkmn.hp - dmg)
+      eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} ${pkmn.status} 때문에 ${dmg} 데미지를 입었다!`))
+      eotLogs.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
+      if (pkmn.hp <= 0) eotLogs.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
+    }
   })
 
   // 씨뿌리기 EOT (플레이어 간)
