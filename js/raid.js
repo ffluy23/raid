@@ -168,6 +168,25 @@ function updateBossUI(data) {
 
   updateHpBar("boss-hp-bar", "boss-hp-text", bossHp, bossMaxHp, true)
 
+  // 보스 포트레이트
+  const img = $("boss-portrait")
+  const ph  = document.querySelector(".boss-portrait-placeholder")
+  if (img) {
+    const portrait = data.portrait ?? null
+    if (!portrait) {
+      img.classList.remove("visible"); img.style.display = "none"
+      if (ph) ph.style.display = "block"
+    } else if (img.dataset.loadedSrc !== portrait) {
+      img.dataset.loadedSrc = portrait
+      if (ph) ph.style.display = "none"
+      img.classList.remove("visible")
+      img.style.display = "block"
+      img.src = portrait
+      img.alt = bossName
+      setTimeout(() => img.classList.add("visible"), 60)
+    }
+  }
+
   const statusEl = $("boss-status")
   if (statusEl) {
     const s = data.boss_status ?? null
