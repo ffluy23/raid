@@ -1,5 +1,6 @@
 // api/raidUseMove.js
 import { db } from "../lib/firestore.js"
+import { executeBossAction, deepCopyEntries as deepCopyRaidEntries2, checkRaidWin as checkRaidWin2, PLAYER_SLOTS as PS } from "../lib/raidBossAction.js"
 import { moves } from "../lib/moves.js"
 import { getTypeMultiplier } from "../lib/typeChart.js"
 import {
@@ -393,6 +394,18 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
   }
 
   return checkRaidWin(entries, data.boss_current_hp ?? 0)
+}
+
+// ── 보스 턴 연속 처리 ────────────────────────────────────────────────
+async function runBossIfNext(roomId, data, entries) {
+  const snap     = await db.collection("raid").doc(roomId).get()
+  const freshData = snap.data()
+  if (!freshData || freshData.game_over) return null
+  const order = freshData.current_order ?? []
+  if (order[0] !== "boss") return null
+  // entries는 최신 상태로 다시 읽어옴
+  const freshEntries = deepCopyRaidEntries2(freshData)
+  return executeBossAction(roomId, freshData, freshEntries, order)
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -853,5 +866,9 @@ export default async function handler(req, res) {
   }
 
   await roomRef.update(update)
+
+  // 다음 턴이 보스면 서버에서 연속 처리
+  await runBossIfNext(roomId, data, entries).catch(e => console.warn("보스 연속 처리 오류:", e.message))
+
   return res.status(200).json({ ok: true })
 }

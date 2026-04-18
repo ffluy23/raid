@@ -1,6 +1,7 @@
 // api/raidStartRound.js
 import { db } from "../lib/firestore.js"
 import { rollD10, corsHeaders } from "../lib/gameUtils.js"
+import { executeBossAction, deepCopyEntries as deepCopyRaidEntries2 } from "../lib/raidBossAction.js"
 
 const PLAYER_SLOTS = ["p1", "p2", "p3"]
 
@@ -126,6 +127,18 @@ export default async function handler(req, res) {
     await batch.commit()
 
     const { data: _d, ...safeResult } = result
+
+    // 보스 선공이면 서버에서 즉시 처리
+    if (result.order?.[0] === "boss") {
+      const snap2 = await db.collection("raid").doc(roomId).get()
+      const freshData = snap2.data()
+      if (freshData && !freshData.game_over) {
+        const freshEntries = deepCopyRaidEntries2(freshData)
+        await executeBossAction(roomId, freshData, freshEntries, freshData.current_order ?? [])
+          .catch(e => console.warn("보스 선공 처리 오류:", e.message))
+      }
+    }
+
     return res.status(200).json(safeResult)
 
   } catch (e) {
