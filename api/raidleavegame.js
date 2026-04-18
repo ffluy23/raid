@@ -81,6 +81,7 @@ export default async function handler(req, res) {
 
     // ── 이벤트 초기화 ────────────────────────────────────────
     dice_event: null,
+    umbreon_used: false,
   })
 
   return res.status(200).json({ ok: true })
