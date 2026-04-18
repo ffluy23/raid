@@ -94,8 +94,6 @@ function cannotRequestSupport(data) {
 }
 
 // ── slotToPrefix ────────────────────────────────────────────────────
-// my / ally1 / ally2 / boss
-// 관전자는 p1=my 고정
 const SPECTATOR_PREFIX = { p1: "my", p2: "ally1", p3: "ally2" }
 
 function slotToPrefix(slot) {
@@ -168,14 +166,12 @@ function updateBossUI(data) {
 
   updateHpBar("boss-hp-bar", "boss-hp-text", bossHp, bossMaxHp, true)
 
-  // 상태이상
   const statusEl = $("boss-status")
   if (statusEl) {
     const s = data.boss_status ?? null
     statusEl.innerText = s ? `[${s}]` : ""
   }
 
-  // 랭크 변화 표시 (옵션)
   const rankEl = $("boss-rank")
   if (rankEl) {
     const rank = data.boss_rank ?? {}
@@ -240,7 +236,6 @@ function triggerAutoAction(data) {
   const { mv, i: moveIdx } = usable[Math.floor(Math.random() * usable.length)]
   const moveInfo = moves[mv.name] ?? {}
 
-  // aoe — 보스 포함 전체 공격
   if (moveInfo.aoe || moveInfo.aoeEnemy) {
     doUseMove(moveIdx, ["boss"], data); return
   }
@@ -292,8 +287,9 @@ async function handleLogEntry(entry) {
       await wait(100)
       break
     }
-    case "assist": { await showAssistAnimation(); break }
-    case "sync":   { await showSyncAnimation();   break }
+    case "assist":  { await showAssistAnimation();  break }
+    case "sync":    { await showSyncAnimation();    break }
+    case "umbreon": { await showUmbreonAnimation(); break }
     case "faint": {
       if (text) await typeText(logEl, text)
       if (meta?.slot) {
@@ -478,6 +474,37 @@ function showSyncAnimation() {
   })
 }
 
+// ── 블래키 Override! 애니메이션 ──────────────────────────────────────
+function showUmbreonAnimation() {
+  return new Promise(resolve => {
+    const el      = $("umbreon-anim")
+    const wrapper = $("battle-wrapper")
+    if (!el) { resolve(); return }
+
+    // 효과음
+    playSound(SFX_DICE)
+
+    // 화면 강하게 3번 흔들기
+    if (wrapper) {
+      let shakeCount = 0
+      const doShake = () => {
+        wrapper.classList.remove("screen-shake-heavy"); void wrapper.offsetWidth
+        wrapper.classList.add("screen-shake-heavy")
+        wrapper.addEventListener("animationend", () => {
+          wrapper.classList.remove("screen-shake-heavy")
+          shakeCount++
+          if (shakeCount < 3) setTimeout(doShake, 50)
+        }, { once: true })
+      }
+      doShake()
+    }
+
+    // Override! 텍스트 애니메이션
+    el.classList.remove("umbreon-show"); void el.offsetWidth; el.classList.add("umbreon-show")
+    setTimeout(resolve, 1400)
+  })
+}
+
 // ── 기술 버튼 ────────────────────────────────────────────────────────
 function updateMoveButtons(data) {
   const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
@@ -541,10 +568,7 @@ let pendingMoveIdx = -1
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
 
-  // outrage — 보스를 자동 타겟
   if (moveInfo?.outrage) { doUseMove(idx, ["boss"], data); return }
-
-  // aoe / aoeEnemy — 레이드에서는 보스 단독 타겟
   if (moveInfo?.aoe || moveInfo?.aoeEnemy) { doUseMove(idx, ["boss"], data); return }
 
   const r = moveInfo?.rank
@@ -558,7 +582,6 @@ function onMoveClick(idx, moveInfo, data) {
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
     || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
 
-  // 레이드에서 적은 항상 boss
   if (targetsEnemy) {
     doUseMove(idx, ["boss"], data)
   } else {
@@ -688,11 +711,8 @@ function updateTurnUI(data) {
 }
 
 // ── 어시스트 UI ──────────────────────────────────────────────────────
-// 구조: 1명 신청 → 나머지 2명 동의 → 2/2 동의 시 발동
-// Firestore 필드: assist_request { from, fromName, agrees: [] }
-
 function updateAssistUI(data) {
-  const assist  = data.assist_active  ?? null   // 발동 중인 어시스트
+  const assist  = data.assist_active  ?? null
   const used    = data.assist_used    ?? false
   const req     = data.assist_request ?? null
   const blocked = cannotRequestSupport(data)
@@ -716,7 +736,6 @@ function updateAssistUI(data) {
     }
   }
 
-  // 동의 팝업: 내가 신청자가 아니고, 아직 동의 안 했으면 표시
   const popup = $("assist-popup")
   if (popup) {
     const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
@@ -739,10 +758,6 @@ function updateAssistUI(data) {
 }
 
 // ── 싱크로나이즈 UI ──────────────────────────────────────────────────
-// 구조: 1명 신청 → 나머지 2명 동의 → 3명이 각자 기술 사용 → 데미지 합산 후 보스에게 일괄 적용
-// Firestore 필드: sync_request { from, fromName, agrees: [] }
-//                 sync_active { damages: {p1:n, p2:n, p3:n}, ready: [] }
-
 function updateSyncUI(data) {
   const sync    = data.sync_active  ?? null
   const used    = data.sync_used    ?? false
@@ -767,7 +782,6 @@ function updateSyncUI(data) {
     }
   }
 
-  // 싱크 상태 표시
   const statusEl = $("sync-status")
   if (statusEl) {
     if (sync) {
@@ -779,7 +793,6 @@ function updateSyncUI(data) {
     }
   }
 
-  // 동의 팝업
   const popup = $("sync-popup")
   if (popup) {
     const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
@@ -803,7 +816,7 @@ function showGameOver(data) {
   if (gameOver) return
   gameOver = true
   clearTurnTimer()
-  const win = data.raid_result === "victory"   // "victory" or "defeat"
+  const win = data.raid_result === "victory"
   const td  = $("turn-display")
   if (isSpectator) {
     if (td) { td.innerText = win ? "🏆 레이드 성공!" : "💀 레이드 실패..."; td.style.color = win ? "gold" : "red" }
@@ -878,7 +891,6 @@ function listenRoom() {
       if (currentTurnSlot && !data.game_over) {
         const turnStartedAt = data.turn_started_at ?? Date.now()
         if (isSpectator || currentTurnSlot === "boss") {
-          // 관전자 / 보스 턴: 타이머 표시만
           const calcRemaining = () => Math.max(0, TIMER_SECONDS - Math.floor((Date.now() - turnStartedAt) / 1000))
           timerSecondsLeft = calcRemaining()
           const el = $("turn-timer"); if (el) el.style.display = "inline"
@@ -915,7 +927,6 @@ function listenRoom() {
         }
       }
 
-      // 비활성 플레이어도 타이머 표시
       if (!isMyTurnNow && currentTurnSlot && currentTurnSlot !== "boss" && !data.game_over) {
         if (!timerTickInterval) {
           clearTurnTimer()
@@ -940,12 +951,10 @@ function listenRoom() {
           const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
           const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
 
-          // 유턴 강제교체
           if (data[`force_switch_${mySlot}`] && myActivePkmn && myActivePkmn.hp > 0) {
             actionDone = false; applyRoomData(data); return
           }
 
-          // outrageState 자동 발동
           if (myActivePkmn?.outrageState?.active) {
             const outrageMoveIdx = (myActivePkmn.moves ?? [])
               .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
@@ -971,6 +980,18 @@ function listenRoom() {
 
       if (order.length === 0 && data.game_started && data.intro_done) {
         tryStartRound()
+      }
+    }
+
+    // 기절 시 즉시 교체 버튼 활성화
+    if (!isSpectator && !data.game_over && mySlot) {
+      const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
+      const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
+      const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
+      const hasAlive     = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
+      if (isFainted && hasAlive) {
+        updateBenchButtons(data)
+        updateTurnUI(data)
       }
     }
 
@@ -1070,7 +1091,6 @@ onAuthStateChanged(auth, async user => {
   listenRoom()
 })
 
-// HTML에서 버튼 onclick으로 호출
 window.__doRequestAssist = doRequestAssist
 window.__doAgreeAssist   = doAgreeAssist
 window.__doRejectAssist  = doRejectAssist

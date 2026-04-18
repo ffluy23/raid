@@ -293,7 +293,7 @@ body {
 #sync-popup button:first-of-type { background: #27ae60; color: #fff; }
 #sync-popup button:last-of-type  { background: #e74c3c; color: #fff; }
 
-/* ── ASSIST! / SYNCHRONIZE! 애니메이션 ── */
+/* ── ASSIST! / SYNCHRONIZE! / Override! 애니메이션 ── */
 #assist-anim {
   position: fixed; top: 40%; left: 50%;
   transform: translate(-50%, -50%);
@@ -325,6 +325,27 @@ body {
   100% { transform: translate(-50%,-50%) translateX(0) scale(1.8) skew(-10deg); opacity: 0; }
 }
 
+/* ── Override! 블래키 애니메이션 ── */
+#umbreon-anim {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(36px, 7vw, 68px); font-weight: 900;
+  color: #fff; letter-spacing: 4px;
+  text-shadow:
+    0 0 10px #1a1a2e,
+    0 0 20px #9b59b6,
+    0 0 40px #9b59b6,
+    2px 2px 0 #000;
+  opacity: 0; pointer-events: none; z-index: 9999;
+}
+.umbreon-show { animation: juicyUmbreon 1.4s cubic-bezier(.2,1.5,.5,1) forwards; }
+@keyframes juicyUmbreon {
+  0%   { transform: translate(-50%,-50%) scale(0.3) rotate(-8deg); opacity: 0; }
+  25%  { transform: translate(-50%,-50%) scale(1.4) rotate(-8deg); opacity: 1; }
+  55%  { transform: translate(-50%,-50%) scale(1.2) rotate(-8deg); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(2.0) rotate(-8deg); opacity: 0; }
+}
+
 /* ── 이펙트 ── */
 .defender-hit { animation: defenderHit 0.35s ease; }
 @keyframes defenderHit {
@@ -345,6 +366,20 @@ body {
   60% { transform: translate(-2px,1px); }
   80% { transform: translate(2px,-1px); }
   100%{ transform: translate(0,0); }
+}
+.screen-shake-heavy { animation: screenShakeHeavy 0.9s ease; }
+@keyframes screenShakeHeavy {
+  0%  { transform: translate(0,0) rotate(0deg); }
+  10% { transform: translate(-8px, 4px) rotate(-1deg); }
+  20% { transform: translate(8px, -4px) rotate(1deg); }
+  30% { transform: translate(-6px, 3px) rotate(-0.5deg); }
+  40% { transform: translate(6px, -3px) rotate(0.5deg); }
+  50% { transform: translate(-4px, 2px) rotate(-0.5deg); }
+  60% { transform: translate(4px, -2px) rotate(0deg); }
+  70% { transform: translate(-3px, 1px) rotate(0deg); }
+  80% { transform: translate(3px, -1px) rotate(0deg); }
+  90% { transform: translate(-1px, 1px) rotate(0deg); }
+  100%{ transform: translate(0,0) rotate(0deg); }
 }
 .fainted { opacity: 0.3; filter: grayscale(1); }
 
@@ -419,6 +454,7 @@ body {
 <div id="battle-wrapper">
   <div id="assist-anim">ASSIST!</div>
   <div id="sync-anim">SYNCHRONIZE!</div>
+  <div id="umbreon-anim">Override!</div>
 
   <div id="battle-screen">
     <div id="battle-top">

@@ -48,7 +48,6 @@ function getBaseStat(pokemon, key) {
 }
 
 // ── 승패 판정 ────────────────────────────────────────────────────────
-// 보스 HP 0 → 플레이어 승리 / 플레이어 전원 기절 → 패배
 function checkRaidWin(entries, bossHp) {
   if (bossHp <= 0) return "victory"
   const allDead = PLAYER_SLOTS.every(s => (entries[s] ?? []).every(p => p.hp <= 0))
@@ -71,7 +70,7 @@ function buildRaidEntryUpdate(entries) {
   return update
 }
 
-// ── 랭크 ────────────────────────────────────────────────────────────
+// ── 랭크 틱 ─────────────────────────────────────────────────────────
 function tickRanks(pokemon, logEntries) {
   if (!pokemon.ranks) return
   const r = pokemon.ranks
@@ -80,6 +79,7 @@ function tickRanks(pokemon, logEntries) {
   if (r.spdTurns > 0) { r.spdTurns--; if (!r.spdTurns) { r.spd = 0; logEntries.push(makeLog("normal", `${pokemon.name}의 스피드 랭크가 원래대로 돌아왔다!`)) } }
 }
 
+// ── 랭크 변화 적용 ───────────────────────────────────────────────────
 function applyRankChanges(r, self, target, moveName, logEntries) {
   if (!r) return
   const roll = r.chance !== undefined ? Math.random() < r.chance : true
@@ -162,43 +162,75 @@ function calcDamage(atk, moveName, def, powerOverride = null, diceOverride = nul
   return { damage: critical ? Math.floor(baseDmg * 1.5) : baseDmg, multiplier: mult, stab, critical, dice }
 }
 
+// ── aoe 아군 피해 적용 ───────────────────────────────────────────────
+// aoe: true → 보스 + 아군 전체 피해
+// aoeEnemy: true → 보스만 (아군 제외)
+function applyAoeFriendlyFire(myPkmn, mySlot, moveName, entries, data, logEntries) {
+  const move = moves[moveName]
+  if (!move?.aoe) return  // aoeEnemy는 아군 미적용
+  const dice = rollD10()
+  for (const s of PLAYER_SLOTS) {
+    if (s === mySlot) continue
+    const idx  = data[`${s}_active_idx`] ?? 0
+    const ally = entries[s]?.[idx]
+    if (!ally || ally.hp <= 0) continue
+    const allyTypes = Array.isArray(ally.type) ? ally.type : [ally.type]
+    let mult = 1
+    for (const t of allyTypes) mult *= getTypeMultiplier(move.type, t)
+    if (mult === 0) { logEntries.push(makeLog("normal", `${ally.name}에게는 효과가 없다…`)); continue }
+    const atkStat = getBaseStat(myPkmn, "atk")
+    const power   = move.power ?? 40
+    const base    = power + atkStat * 4 + dice
+    const raw     = Math.floor(base * mult * (Array.isArray(myPkmn.type) ? myPkmn.type : [myPkmn.type]).includes(move.type) ? 1.3 : 1)
+    const atkRank = getActiveRankVal(myPkmn, "atk")
+    const afterAtk = Math.max(0, raw + atkRank)
+    const afterDef = afterAtk - getBaseStat(ally, "def") * 3
+    const defRank  = getActiveRankVal(ally, "def")
+    let baseDmg    = afterDef - defRank * 3
+    let dmg
+    if (baseDmg <= 0) {
+      dmg = (Math.floor(Math.random() * 5) + 1) * 5
+    } else {
+      dmg = baseDmg
+    }
+    // 아군 데미지는 50% 경감
+    dmg = Math.max(1, Math.floor(dmg * 0.5))
+    if (ally.enduring && dmg >= ally.hp) {
+      ally.hp = 1; ally.enduring = false
+      logEntries.push(makeLog("after_hit", `${ally.name}${josa(ally.name, "은는")} 버텼다!`))
+    } else {
+      ally.hp = Math.max(0, ally.hp - dmg)
+    }
+    logEntries.push(makeLog("hit", "", { defender: s }))
+    logEntries.push(makeLog("hp",  "", { slot: s, hp: ally.hp, maxHp: ally.maxHp }))
+    if (ally.hp <= 0) logEntries.push(makeLog("faint", `${ally.name}${josa(ally.name, "은는")} 쓰러졌다!`, { slot: s }))
+  }
+}
+
 // ── 싱크로나이즈 데미지 분산 ─────────────────────────────────────────
-// 보스가 플레이어를 공격할 때 호출
-// sync_active: true이면 살아있는 플레이어 수로 균등 분산
 function applySyncDistribution(rawDamage, targetSlot, entries, data, logEntries) {
   const syncActive = data.sync_active ?? false
   if (!syncActive) return { distributed: false, damages: { [targetSlot]: rawDamage } }
-
-  // 살아있는 플레이어 슬롯
   const alivePlayers = PLAYER_SLOTS.filter(s => {
     const idx = data[`${s}_active_idx`] ?? 0
     const p   = entries[s]?.[idx]
     return p && p.hp > 0
   })
-
   if (alivePlayers.length <= 1) {
-    // 1명만 살아있으면 분산 불가 → 싱크 해제
     return { distributed: false, damages: { [targetSlot]: rawDamage }, clearSync: true }
   }
-
-  const share  = Math.max(1, Math.floor(rawDamage / alivePlayers.length))
+  const share   = Math.max(1, Math.floor(rawDamage / alivePlayers.length))
   const damages = {}
   alivePlayers.forEach(s => { damages[s] = share })
-
   logEntries.push(makeLog("sync", ""))
-  logEntries.push(makeLog("after_hit",
-    `💠 싱크로나이즈! ${alivePlayers.length}명이 데미지를 균등 분산! (각 ${share})`
-  ))
-
+  logEntries.push(makeLog("after_hit", `💠 싱크로나이즈! ${alivePlayers.length}명이 데미지를 균등 분산! (각 ${share})`))
   return { distributed: true, damages, clearSync: true }
 }
 
 // ── 2턴 기술 공통 처리 ───────────────────────────────────────────────
 function handleTwoTurnAttack(myPkmn, mySlot, targetSlot, entries, data, logEntries, opts = {}) {
   const { moveName, accuracy, isBoss } = opts
-
   if (isBoss) {
-    // 보스 → 플레이어 공격
     const tIdx  = data[`${targetSlot}_active_idx`] ?? 0
     const tPkmn = entries[targetSlot]?.[tIdx]
     if (!tPkmn || tPkmn.hp <= 0) { logEntries.push(makeLog("normal", "상대가 이미 쓰러졌다!")); return }
@@ -210,11 +242,11 @@ function handleTwoTurnAttack(myPkmn, mySlot, targetSlot, entries, data, logEntri
     applyDamagesToPlayers(damages, entries, data, logEntries)
     if (clearSync) data.sync_active = false
   } else {
-    // 플레이어 → 보스 공격
     const { hit, hitType } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, { type: data.boss_type ?? "노말" })
     if (!hit) { logEntries.push(makeLog("normal", "빗나갔다!")); return }
     const fakeBoss = makeFakeBoss(data)
     const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, fakeBoss)
+    const bossName = data.boss_name ?? "보스"
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return }
     const finalDmg = Math.max(1, damage)
     data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - finalDmg)
@@ -257,7 +289,6 @@ function applyDamagesToPlayers(damages, entries, data, logEntries) {
     logEntries.push(makeLog("hit", "", { defender: slot }))
     logEntries.push(makeLog("hp",  "", { slot, hp: pkmn.hp, maxHp: pkmn.maxHp }))
     if (pkmn.hp <= 0) logEntries.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot }))
-    // 참기 데미지 누적
     if (pkmn.bideState) {
       pkmn.bideState.damage = (pkmn.bideState.damage ?? 0) + dmg
       pkmn.bideState.lastAttackerSlot = "boss"
@@ -268,7 +299,6 @@ function applyDamagesToPlayers(damages, entries, data, logEntries) {
 // ── finishTurn ────────────────────────────────────────────────────────
 async function finishTurn(roomRef, roomId, data, entries, logEntries, extraUpdate = {}) {
   const { assistEventTs, syncEventTs } = await writeLogs(roomId, logEntries)
-
   const newOrder = (data.current_order ?? []).slice(1)
   const update   = {
     ...buildRaidEntryUpdate(entries),
@@ -284,11 +314,9 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, extraUpdat
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
     ...extraUpdate,
   }
-
   PLAYER_SLOTS.forEach(s => {
     if (data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`]
   })
-
   const result = checkRaidWin(entries, data.boss_current_hp ?? 0)
   if (result) {
     update.game_over     = true
@@ -296,7 +324,6 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, extraUpdat
     update.current_order = []
     update.turn_started_at = null
   }
-
   await roomRef.update(update)
   return result
 }
@@ -304,22 +331,15 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, extraUpdat
 // ── EOT 처리 ─────────────────────────────────────────────────────────
 async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries) {
   const eotLogs = []
-
   PLAYER_SLOTS.forEach(s => {
     const idx  = data[`${s}_active_idx`] ?? 0
     const pkmn = entries[s]?.[idx]
     if (!pkmn || pkmn.hp <= 0) return
-
-    // 랭크 틱
     tickRanks(pkmn, eotLogs)
-
-    // 도발 틱
     if ((pkmn.taunted ?? 0) > 0) {
       pkmn.taunted--
       if (!pkmn.taunted) eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 도발이 풀렸다!`))
     }
-
-    // 사슬묶기 틱
     if (pkmn.chainBound) {
       pkmn.chainBound.turnsLeft--
       if (pkmn.chainBound.turnsLeft <= 0) {
@@ -327,28 +347,20 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
         eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 사슬묶기가 풀렸다!`))
       }
     }
-
-    // 회복봉인 틱
     if ((pkmn.healBlocked ?? 0) > 0) {
       pkmn.healBlocked--
       if (!pkmn.healBlocked) eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 회복봉인이 풀렸다!`))
     }
-
-    // 지옥찌르기 틱
     if ((pkmn.throatChopped ?? 0) > 0) {
       pkmn.throatChopped--
       if (!pkmn.throatChopped) eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 다시 소리를 낼 수 있게 됐다!`))
     }
-
-    // 아쿠아링
     if (pkmn.aquaRing) {
       const heal = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.0625))
       pkmn.hp = Math.min(pkmn.maxHp ?? pkmn.hp, pkmn.hp + heal)
       eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 아쿠아링으로 HP를 회복했다! (+${heal})`))
       eotLogs.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
     }
-
-    // 저주
     if (pkmn.cursed && pkmn.hp > 0) {
       const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.25))
       pkmn.hp = Math.max(0, pkmn.hp - dmg)
@@ -356,8 +368,6 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
       eotLogs.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
       if (pkmn.hp <= 0) eotLogs.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
     }
-
-    // 독/화상
     if (pkmn.status === "독" || pkmn.status === "화상") {
       const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 16))
       pkmn.hp = Math.max(0, pkmn.hp - dmg)
@@ -366,8 +376,7 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
       if (pkmn.hp <= 0) eotLogs.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
     }
   })
-
-  // 씨뿌리기 EOT (플레이어 간)
+  // 씨뿌리기 EOT
   for (const tSlot of PLAYER_SLOTS) {
     const tIdx  = data[`${tSlot}_active_idx`] ?? 0
     const tPkmn = entries[tSlot]?.[tIdx]
@@ -386,7 +395,6 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
     }
     if (tPkmn.hp <= 0) eotLogs.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name, "은는")} 쓰러졌다!`, { slot: tSlot }))
   }
-
   if (eotLogs.length > 0) {
     const logsRef = db.collection("raid").doc(roomId).collection("logs")
     const base    = Date.now()
@@ -395,20 +403,573 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
     await batch.commit()
     Object.assign(update, buildRaidEntryUpdate(entries))
   }
-
   return checkRaidWin(entries, data.boss_current_hp ?? 0)
 }
 
 // ── 보스 턴 연속 처리 ────────────────────────────────────────────────
 async function runBossIfNext(roomId, data, entries) {
-  const snap     = await db.collection("raid").doc(roomId).get()
+  const snap      = await db.collection("raid").doc(roomId).get()
   const freshData = snap.data()
   if (!freshData || freshData.game_over) return null
   const order = freshData.current_order ?? []
   if (order[0] !== "boss") return null
-  // entries는 최신 상태로 다시 읽어옴
   const freshEntries = deepCopyRaidEntries2(freshData)
   return executeBossAction(roomId, freshData, freshEntries, order)
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  특수 비공격 기술 (더블배틀에서 이식, 레이드 맥락 조정)
+// ════════════════════════════════════════════════════════════════════
+function handleRaidSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, entries, data, logEntries) {
+  if (!moveInfo) return { handled: false }
+  const bossName = data.boss_name ?? "보스"
+
+  if (moveInfo.defend) {
+    myPkmn.defending   = true
+    myPkmn.defendTurns = 2
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 방어 태세에 들어갔다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.endure) {
+    myPkmn.enduring = true
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 버티기 태세에 들어갔다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.amulet) {
+    myPkmn.amuletTurns = 3
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 신비의 부적으로 몸을 감쌌다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.wish) {
+    myPkmn.wishTurns = 2
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 희망사항을 빌었다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.aquaRing) {
+    myPkmn.aquaRing = true
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 물의 베일로 몸을 감쌌다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.haze) {
+    // 레이드에서는 플레이어 전체 랭크 초기화
+    PLAYER_SLOTS.forEach(s => {
+      const idx  = data[`${s}_active_idx`] ?? 0
+      const pkmn = entries[s]?.[idx]
+      if (pkmn?.ranks) {
+        pkmn.ranks = defaultRanks()
+        pkmn.lastRankMove = null; pkmn.rankStack = 0
+      }
+    })
+    // 보스 랭크도 초기화
+    data.boss_rank = defaultRanks()
+    logEntries.push(makeLog("normal", `흑안개가 배틀 전체를 뒤덮었다!`))
+    logEntries.push(makeLog("normal", `모든 포켓몬의 능력 변화가 원래대로 돌아왔다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.poisonPowder) {
+    // 레이드에서 독가루 계열은 보스 대상
+    const bossTypes = Array.isArray(data.boss_type) ? data.boss_type : [data.boss_type ?? "노말"]
+    if (bossTypes.includes("풀")) {
+      logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} ${moveName}에 걸리지 않는다!`))
+    } else if (data.boss_status) {
+      logEntries.push(makeLog("normal", `그러나 ${bossName}${josa(bossName, "은는")} 이미 상태이상이다!`))
+    } else {
+      const fakeBoss = makeFakeBoss(data)
+      const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+      if (!hit) {
+        logEntries.push(makeLog("normal", hitType === "evaded" ? `${bossName}에게는 맞지 않았다!` : `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
+      } else {
+        data.boss_status = moveInfo.effect?.status ?? "독"
+        logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} ${data.boss_status} 상태가 됐다!`))
+      }
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.curse) {
+    const atkTypes = Array.isArray(myPkmn.type) ? myPkmn.type : [myPkmn.type]
+    const isGhost  = atkTypes.includes("고스트")
+    if (isGhost) {
+      // 고스트: 자기 HP 깎고 보스에게 저주
+      const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) / 3))
+      myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
+      logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 깎았다! (-${selfDmg})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+      if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+      if (!(data.boss_volatile?.cursed)) {
+        data.boss_volatile = { ...(data.boss_volatile ?? {}), cursed: true }
+        logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} 저주에 걸렸다!`))
+      } else {
+        logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} 이미 저주 상태다!`))
+      }
+    } else {
+      applyRankChanges({ spd: -1, atk: 1, def: 1, turns: 2 }, myPkmn, myPkmn, moveName, logEntries)
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.healBlock) {
+    logEntries.push(makeLog("normal", `${bossName}의 회복이 봉인됐다!`))
+    data.boss_volatile = { ...(data.boss_volatile ?? {}), healBlocked: 3 }
+    return { handled: true }
+  }
+
+  if (moveInfo.torment) {
+    logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "을를")} 트집 상태로 만들었다!`))
+    data.boss_volatile = { ...(data.boss_volatile ?? {}), tormented: true }
+    return { handled: true }
+  }
+
+  if (moveInfo.taunt) {
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} ${bossName}${josa(bossName, "을를")} 도발했다!`))
+    data.boss_volatile = { ...(data.boss_volatile ?? {}), taunted: 3 }
+    return { handled: true }
+  }
+
+  if (moveInfo.chainBind) {
+    const lastBossMove = data.boss_last_move ?? null
+    if (lastBossMove) {
+      data.boss_volatile = { ...(data.boss_volatile ?? {}), chainBound: { moveName: lastBossMove, turnsLeft: 2 } }
+      logEntries.push(makeLog("normal", `${bossName}의 ${lastBossMove}${josa(lastBossMove, "을를")} 봉인했다!`))
+    } else {
+      logEntries.push(makeLog("normal", `그러나 봉인할 기술이 없다!`))
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.futureSight) {
+    if (myPkmn.futureSight) {
+      logEntries.push(makeLog("normal", `이미 미래예지가 걸려있다!`))
+    } else {
+      myPkmn.futureSight = { turnsLeft: 2, attackerName: myPkmn.name, power: 70, targetSlot: "boss" }
+      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 미래를 예지했다!`))
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.leechSeed) {
+    // 레이드에서 씨뿌리기는 보스에게 효과 없음
+    logEntries.push(makeLog("normal", `${bossName}에게 씨를 뿌렸다! (레이드에서는 효과 없음)`))
+    return { handled: true }
+  }
+
+  if (moveInfo.roar) {
+    // 레이드에서 울부짖기/드래곤테일 등 교체 강제: 보스한테는 효과 없음
+    logEntries.push(makeLog("normal", `그러나 ${bossName}${josa(bossName, "은는")} 꿈쩍도 하지 않는다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.bide) {
+    myPkmn.bideState = { turnsLeft: 2, damage: 0 }
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 참기 시작했다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.charge) {
+    myPkmn.charged = true
+    applyRankChanges({ def: 1, turns: 2 }, myPkmn, myPkmn, moveName, logEntries)
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 전기를 충전했다!`))
+    return { handled: true }
+  }
+
+  if (moveInfo.splash) {
+    logEntries.push(makeLog("normal", "그러나 아무 일도 일어나지 않았다!"))
+    return { handled: true }
+  }
+
+  if (moveInfo.effect?.removeFlying) {
+    // 날개쉬기
+    if ((myPkmn.healBlocked ?? 0) <= 0) {
+      const healRate = moveInfo.effect.heal ?? 0.22
+      const heal     = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * healRate))
+      myPkmn.hp      = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
+      logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+      const types = Array.isArray(myPkmn.type) ? [...myPkmn.type] : [myPkmn.type]
+      myPkmn._origType  = myPkmn.type
+      myPkmn.type       = types.includes("비행") ? types.filter(t => t !== "비행") : ["노말"]
+      if (myPkmn.type.length === 0) myPkmn.type = ["노말"]
+      myPkmn.roostTurns = 1
+      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 땅에 내려앉아 비행 타입이 사라졌다!`))
+    } else {
+      logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.effect?.heal && moveInfo.targetSelf !== false) {
+    if ((myPkmn.healBlocked ?? 0) <= 0) {
+      const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * moveInfo.effect.heal))
+      myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
+      logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+    } else {
+      logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
+    }
+    return { handled: true }
+  }
+
+  if (moveInfo.healPulse) {
+    // 아군 회복
+    const allyTarget = tSlots.find(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
+    if (allyTarget) {
+      const aIdx  = data[`${allyTarget}_active_idx`] ?? 0
+      const aPkmn = entries[allyTarget]?.[aIdx]
+      if (aPkmn && aPkmn.hp > 0) {
+        const heal = Math.max(1, Math.floor((aPkmn.maxHp ?? aPkmn.hp) * 0.22))
+        aPkmn.hp   = Math.min(aPkmn.maxHp ?? aPkmn.hp, aPkmn.hp + heal)
+        logEntries.push(makeLog("hp", `${aPkmn.name}${josa(aPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: allyTarget, hp: aPkmn.hp, maxHp: aPkmn.maxHp }))
+      }
+    }
+    return { handled: true }
+  }
+
+  return { handled: false }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  특수 공격 기술 (더블배틀에서 이식, 레이드 맥락 조정)
+//  tSlot은 항상 "boss", tPkmn은 makeFakeBoss 객체
+// ════════════════════════════════════════════════════════════════════
+function handleRaidSpecialAttack(moveInfo, moveName, myPkmn, mySlot, data, logEntries) {
+  if (!moveInfo) return { handled: false, damage: 0 }
+  const bossName = data.boss_name ?? "보스"
+  const fakeBoss = makeFakeBoss(data)
+
+  const missLog = (hitType) => logEntries.push(makeLog("normal",
+    hitType === "evaded" ? `${bossName}${josa(bossName, "이가")} 피했다!` : `${myPkmn.name}의 공격은 빗나갔다!`))
+
+  function dealDamageToBoss(dmg, multiplier, critical, minRoll = false, minDice = 0) {
+    data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - dmg)
+    logEntries.push(makeLog("hit", "", { defender: "boss" }))
+    logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
+    if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+    if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
+    if (minRoll)        logEntries.push(makeLog("after_hit", `${minDice}! (최소 피해 보장)`))
+    else if (critical)  logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+    if (data.boss_current_hp <= 0)
+      logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
+  }
+
+  // 속이기 (fakeOut)
+  if (moveInfo.fakeOut) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    if (Math.random() < 0.5) {
+      const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+      if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+      dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+      return { handled: true, damage }
+    } else {
+      logEntries.push(makeLog("normal", `속이기에 실패했다!`))
+      applyRankChanges({ def: -2, turns: 2 }, myPkmn, myPkmn, null, logEntries)
+      return { handled: true, damage: 0 }
+    }
+  }
+
+  // 무릎차기 (jumpKick) - 빗나갔을 때 자기피해
+  if (moveInfo.jumpKick) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) {
+      missLog(hitType)
+      const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.25))
+      myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
+      logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${selfDmg} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+      if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+      return { handled: true, damage: 0 }
+    }
+    return { handled: false, damage: 0 }  // 맞으면 일반 처리
+  }
+
+  // 카운터
+  if (moveInfo.counter) {
+    const lastDmg = myPkmn.lastReceivedDamage ?? 0
+    if (lastDmg <= 0) { logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "의")} 카운터는 실패했다!`)); return { handled: true, damage: 0 } }
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const dmg = Math.max(1, Math.floor(lastDmg * 1.2))
+    dealDamageToBoss(dmg, 1, false)
+    myPkmn.lastReceivedDamage = 0
+    return { handled: true, damage: dmg }
+  }
+
+  // 원수갚기/보복 (revenge/comeback)
+  if (moveInfo.revenge || moveInfo.comeback) {
+    const lastDmg = myPkmn.lastReceivedDamage ?? 0
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const comebackMult = (moveInfo.comeback && lastDmg > 0) ? 1.2 : 1.0
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    if (comebackMult > 1) logEntries.push(makeLog("after_hit", "원한이 쌓인 일격!"))
+    const finalDmg = Math.floor(rawDmg * comebackMult)
+    dealDamageToBoss(finalDmg, multiplier, critical, minRoll, minDice)
+    myPkmn.lastReceivedDamage = 0
+    return { handled: true, damage: finalDmg }
+  }
+
+  // 기사회생/바둥바둥 (reversal)
+  if (moveInfo.reversal) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const hpRatio = myPkmn.hp / (myPkmn.maxHp ?? myPkmn.hp)
+    const revMult = hpRatio <= 0.25 ? 2.0 : hpRatio <= 0.5 ? 1.5 : 1.0
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(Math.floor(rawDmg * revMult), multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: Math.floor(rawDmg * revMult) }
+  }
+
+  // 객기 (guts)
+  if (moveInfo.guts) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const gutsMult = myPkmn.status ? 1.2 : 1.0
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    if (myPkmn.status) logEntries.push(makeLog("after_hit", `${myPkmn.name}${josa(myPkmn.name, "은는")} 객기를 부렸다!`))
+    dealDamageToBoss(Math.floor(rawDmg * gutsMult), multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: Math.floor(rawDmg * gutsMult) }
+  }
+
+  // 승부굳히기 (finisher)
+  if (moveInfo.finisher) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const bossHpRatio = (data.boss_current_hp ?? 0) / (data.boss_max_hp ?? 1)
+    const finMult = bossHpRatio <= 0.5 ? 1.2 : 1.0
+    const { damage: rawDmg, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(Math.floor(rawDmg * finMult), multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: Math.floor(rawDmg * finMult) }
+  }
+
+  // 자이로볼 (gyroBall)
+  if (moveInfo.gyroBall) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const atkSpd  = Math.max(1, getBaseStat(myPkmn, "spd") + getActiveRankVal(myPkmn, "spd"))
+    const defSpd  = Math.max(1, (data.boss_speed ?? 3))
+    const ratio   = defSpd / atkSpd
+    const power   = ratio <= 1 ? 30 : ratio <= 2 ? 40 : ratio <= 3 ? 50 : 60
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss, power)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    return { handled: true, damage }
+  }
+
+  // 어시스트파워 (assistPower)
+  if (moveInfo.assistPower) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const r        = myPkmn.ranks ?? {}
+    const atkBonus = (r.atkTurns ?? 0) > 0 ? Math.max(0, r.atk ?? 0) : 0
+    const defBonus = (r.defTurns ?? 0) > 0 ? Math.max(0, r.def ?? 0) : 0
+    const spdBonus = (r.spdTurns ?? 0) > 0 ? Math.max(0, r.spd ?? 0) : 0
+    const total    = atkBonus + defBonus + spdBonus
+    const power    = total <= 1 ? 30 : total <= 3 ? 40 : 50
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss, power)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    return { handled: true, damage }
+  }
+
+  // 연속공격 (multiHit)
+  if (moveInfo.multiHit) {
+    const { min, max, fixedDamage } = moveInfo.multiHit
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const hitCount = Math.floor(Math.random() * (max - min + 1)) + min
+    let totalDmg = 0, lastMult = 1
+    for (let h = 0; h < hitCount; h++) {
+      if ((data.boss_current_hp ?? 0) <= 0) break
+      let dmg, critical = false, multiplier = 1
+      if (fixedDamage !== undefined) {
+        const defTypes = Array.isArray(fakeBoss.type) ? fakeBoss.type : [fakeBoss.type]
+        for (const dt of defTypes) multiplier *= getTypeMultiplier(moves[moveName]?.type, dt)
+        dmg = multiplier === 0 ? 0 : Math.floor(fixedDamage * multiplier)
+      } else {
+        const r = calcDamage(myPkmn, moveName, fakeBoss)
+        dmg = r.damage; critical = r.critical; multiplier = r.multiplier
+      }
+      lastMult = multiplier
+      if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); break }
+      data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - dmg); totalDmg += dmg
+      logEntries.push(makeLog("hit", "", { defender: "boss" }))
+      logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
+      if (critical) logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+      if (data.boss_current_hp <= 0) { logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" })); break }
+    }
+    if (lastMult > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+    if (lastMult < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
+    logEntries.push(makeLog("after_hit", `${hitCount}번 공격했다! (총 ${totalDmg} 데미지)`))
+    return { handled: true, damage: totalDmg }
+  }
+
+  // 반동기술 (recoil) - 일반 처리로 넘기되 반동만 추가
+  if (moveInfo.effect?.recoil) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    const recoil = Math.max(1, Math.floor(damage * moveInfo.effect.recoil))
+    myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
+    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${recoil} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+    if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+    return { handled: true, damage }
+  }
+
+  // 클리어스모그 (clearSmog) - 보스 랭크 초기화 + 데미지
+  if (moveInfo.clearSmog) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    data.boss_rank = defaultRanks()
+    logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "의")} 능력 변화가 원래대로 돌아왔다!`))
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier > 0) dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: multiplier > 0 ? damage : 0 }
+  }
+
+  // 드래곤테일 (dragonTail) - 레이드에서는 보스 교체 없음, 데미지만
+  if (moveInfo.dragonTail) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    logEntries.push(makeLog("normal", `그러나 ${bossName}${josa(bossName, "은는")} 꿈쩍도 하지 않는다!`))
+    return { handled: true, damage }
+  }
+
+  // 속임수 (trickster) - 보스 공격력으로 데미지
+  if (moveInfo.trickster) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const bossAtk = data.boss_attack ?? 5
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss, null, null)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    const finalDmg = Math.floor(damage * 0.7)
+    dealDamageToBoss(finalDmg, multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: finalDmg }
+  }
+
+  // 병상첨병 (sickPower) - 보스 상태이상 시 배율
+  if (moveInfo.sickPower) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const sickMult = data.boss_status ? 1.2 : 1.0
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    if (sickMult > 1) logEntries.push(makeLog("after_hit", `${bossName}${josa(bossName, "의")} 상태이상이 약점이 됐다!`))
+    dealDamageToBoss(Math.floor(damage * sickMult), multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: Math.floor(damage * sickMult) }
+  }
+
+  // 베놈쇼크 (venomShock) - 보스 독 상태 시 배율
+  if (moveInfo.venomShock) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const vsMult = data.boss_status === "독" ? 1.2 : 1.0
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    if (vsMult > 1) logEntries.push(makeLog("after_hit", `${bossName}${josa(bossName, "은는")} 독 상태라 피해가 커졌다!`))
+    dealDamageToBoss(Math.floor(damage * vsMult), multiplier, critical, minRoll, minDice)
+    return { handled: true, damage: Math.floor(damage * vsMult) }
+  }
+
+  // 지옥찌르기 (throatChop)
+  if (moveInfo.throatChop) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} 목을 눌려 소리를 낼 수 없게 됐다!`))
+    data.boss_volatile = { ...(data.boss_volatile ?? {}), throatChopped: 2 }
+    return { handled: true, damage }
+  }
+
+  // 매혹의보이스 (enchantedVoice) - 보스 랭크업 시 혼란(레이드에서는 스킵)
+  if (moveInfo.enchantedVoice) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    return { handled: true, damage }
+  }
+
+  // 꽃가루경단 (pollenPuff) - 보스 대상이면 일반 데미지
+  if (moveInfo.pollenPuff) {
+    // 보스는 항상 적 → 일반 처리로 넘김
+    return { handled: false, damage: 0 }
+  }
+
+  // 고속스핀 (rapidSpin)
+  if (moveInfo.rapidSpin) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    if (myPkmn.seeded) {
+      myPkmn.seeded = false; myPkmn.seederSlot = null
+      logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 씨뿌리기가 풀렸다!`))
+    }
+    if (moveInfo.rank) applyRankChanges(moveInfo.rank, myPkmn, myPkmn, null, logEntries)
+    return { handled: true, damage }
+  }
+
+  // 고정데미지 (fixedDamage)
+  if (moveInfo.fixedDamage) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const defTypes = Array.isArray(fakeBoss.type) ? fakeBoss.type : [fakeBoss.type]
+    let mult = 1
+    for (const dt of defTypes) mult *= getTypeMultiplier(moves[moveName]?.type, dt)
+    if (mult === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    const dmg = moveInfo.fixedDamage
+    data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - dmg)
+    logEntries.push(makeLog("hit", "", { defender: "boss" }))
+    logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
+    logEntries.push(makeLog("after_hit", `${dmg} 데미지!`))
+    if (data.boss_current_hp <= 0) logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
+    return { handled: true, damage: dmg }
+  }
+
+  // 역린/꽃잎댄스 등 (outrage) - 첫 사용 시
+  if (moveInfo.outrage) {
+    const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+    if (!hit) { missLog(hitType); return { handled: true, damage: 0 } }
+    const outrageInfo = moveInfo.outrage
+    const state       = myPkmn.outrageState
+    const isFirst     = !state?.active
+    const maxTurn     = isFirst
+      ? Math.floor(Math.random() * (outrageInfo.maxTurn - outrageInfo.minTurn + 1)) + outrageInfo.minTurn
+      : state.maxTurn
+    const currentTurn = isFirst ? 1 : state.turn
+    const power       = outrageInfo.powers[Math.min(currentTurn - 1, outrageInfo.powers.length - 1)]
+    const isLastTurn  = currentTurn >= maxTurn
+    const { damage, multiplier, critical, minRoll, minDice } = calcDamage(myPkmn, moveName, fakeBoss, power)
+    if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return { handled: true, damage: 0 } }
+    dealDamageToBoss(damage, multiplier, critical, minRoll, minDice)
+    if (isLastTurn) {
+      myPkmn.outrageState = null
+      if (outrageInfo.confusion && (myPkmn.confusion ?? 0) <= 0) {
+        myPkmn.confusion = Math.floor(Math.random() * 3) + 1
+        logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 혼란에 빠졌다!`))
+      }
+    } else {
+      myPkmn.outrageState = { active: true, turn: currentTurn + 1, maxTurn, moveName }
+    }
+    return { handled: true, damage }
+  }
+
+  return { handled: false, damage: 0 }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -450,7 +1011,7 @@ export default async function handler(req, res) {
   if ((myPkmn.taunted ?? 0) > 0 && !(moves[moveData.name]?.power > 0))
     return res.status(403).json({ error: "도발로 사용 불가" })
 
-  // 어시스트 체크 (신청자면 데미지 +15%)
+  // 어시스트 체크
   const assistActive   = data.assist_active ?? false
   const assistFrom     = data.assist_request_from ?? null
   const isAssistCaster = assistActive && assistFrom === mySlot
@@ -607,85 +1168,15 @@ export default async function handler(req, res) {
 
       logEntries.push(makeLog("move_announce", `${myPkmn.name}의 ${moveData.name}!`))
 
-      const tSlots    = targetSlots ?? []
-      const fakeBoss  = makeFakeBoss(data)
-
-      // 보스를 타겟으로 하는 기술인지 확인
-      const hittingBoss = tSlots.includes("boss")
+      const tSlots   = targetSlots ?? []
+      const fakeBoss = makeFakeBoss(data)
 
       // ── 비공격 기술 ──────────────────────────────────────────────
       if (!moveInfo?.power) {
-        // 자기버프 / 상태기술 등은 기존 로직 그대로
-        // 레이드에서는 타겟이 보스 or 자기자신만 존재
-        if (moveInfo?.defend) {
-          myPkmn.defending   = true
-          myPkmn.defendTurns = 2
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 방어 태세에 들어갔다!`))
-        } else if (moveInfo?.endure) {
-          myPkmn.enduring = true
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 버티기 태세에 들어갔다!`))
-        } else if (moveInfo?.amulet) {
-          myPkmn.amuletTurns = 3
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 신비의 부적으로 몸을 감쌌다!`))
-        } else if (moveInfo?.aquaRing) {
-          myPkmn.aquaRing = true
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 물의 베일로 몸을 감쌌다!`))
-        } else if (moveInfo?.bide) {
-          myPkmn.bideState = { turnsLeft: 2, damage: 0 }
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 참기 시작했다!`))
-        } else if (moveInfo?.charge) {
-          myPkmn.charged = true
-          applyRankChanges({ def: 1, turns: 2 }, myPkmn, myPkmn, moveData.name, logEntries)
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 전기를 충전했다!`))
-        } else if (moveInfo?.wish) {
-          myPkmn.wishTurns = 2
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 희망사항을 빌었다!`))
-        } else if (moveInfo?.splash) {
-          logEntries.push(makeLog("normal", "그러나 아무 일도 일어나지 않았다!"))
-        } else if (moveInfo?.taunt) {
-          // 레이드에서 도발은 보스 대상
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} ${bossName}${josa(bossName, "을를")} 도발했다!`))
-          data.boss_volatile = { ...(data.boss_volatile ?? {}), taunted: 3 }
-        } else if (moveInfo?.chainBind) {
-          logEntries.push(makeLog("normal", `${bossName}의 마지막 기술을 봉인했다!`))
-          const lastBossMove = data.boss_last_move ?? null
-          if (lastBossMove) {
-            data.boss_volatile = { ...(data.boss_volatile ?? {}), chainBound: { moveName: lastBossMove, turnsLeft: 2 } }
-          }
-        } else if (moveInfo?.healBlock) {
-          logEntries.push(makeLog("normal", `${bossName}의 회복이 봉인됐다!`))
-          data.boss_volatile = { ...(data.boss_volatile ?? {}), healBlocked: 3 }
-        } else if (moveInfo?.torment) {
-          logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "을를")} 트집 상태로 만들었다!`))
-          data.boss_volatile = { ...(data.boss_volatile ?? {}), tormented: true }
-        } else if (moveInfo?.leechSeed) {
-          logEntries.push(makeLog("normal", `${bossName}에게 씨를 뿌렸다! (레이드에서는 효과 없음)`))
-        } else if (moveInfo?.futureSight) {
-          myPkmn.futureSight = { turnsLeft: 2, attackerName: myPkmn.name, power: 70, targetSlot: "boss" }
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 미래를 예지했다!`))
-        } else if (moveInfo?.effect?.heal) {
-          // 자기 회복
-          if ((myPkmn.healBlocked ?? 0) <= 0) {
-            const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * moveInfo.effect.heal))
-            myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-            logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-          } else {
-            logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
-          }
-        } else if (moveInfo?.healPulse) {
-          // 아군 회복 (pollenPuff 친화 처리 포함)
-          const allyTarget = tSlots.find(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
-          if (allyTarget) {
-            const aIdx  = data[`${allyTarget}_active_idx`] ?? 0
-            const aPkmn = entries[allyTarget]?.[aIdx]
-            if (aPkmn && aPkmn.hp > 0) {
-              const heal = Math.max(1, Math.floor((aPkmn.maxHp ?? aPkmn.hp) * 0.22))
-              aPkmn.hp   = Math.min(aPkmn.maxHp ?? aPkmn.hp, aPkmn.hp + heal)
-              logEntries.push(makeLog("hp", `${aPkmn.name}${josa(aPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: allyTarget, hp: aPkmn.hp, maxHp: aPkmn.maxHp }))
-            }
-          }
-        } else {
-          // 일반 랭크 변화 등
+        const specialResult = handleRaidSpecialNonAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlots, entries, data, logEntries)
+
+        if (!specialResult.handled) {
+          // 랭크 변화 등 기본 처리
           applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
           applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
         }
@@ -708,98 +1199,107 @@ export default async function handler(req, res) {
           myPkmn._ghostDiveTargetSlot = "boss"
           logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 어둠 속으로 사라졌다!`))
         } else {
-          // 일반 공격 → 보스
-          const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
-          if (!hit) {
-            logEntries.push(makeLog("normal", hitType === "evaded" ? `${bossName}${josa(bossName, "이가")} 피했다!` : `${myPkmn.name}의 공격은 빗나갔다!`))
-            if (moveInfo?.jumpKick) {
-              const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.25))
-              myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
-              logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${selfDmg} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-              if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
-            }
-          } else {
-            // 데미지 계산
-            let powerOverride = null
-            if (moveInfo?.rollout) {
-              const rollTurn = myPkmn.rollState?.active ? myPkmn.rollState.turn + 1 : 1
-              powerOverride  = rollTurn === 1 ? 30 : rollTurn === 2 ? 60 : 120
-              myPkmn.rollState = rollTurn >= 3
-                ? { active: false, turn: 0 }
-                : { active: true, turn: rollTurn, targetSlot: "boss" }
-            }
+          // 특수 공격 처리
+          const specialAtk = handleRaidSpecialAttack(moveInfo, moveData.name, myPkmn, mySlot, data, logEntries)
 
-            const { damage, multiplier, critical, dice, minRoll, minDice } = calcDamage(myPkmn, moveData.name, fakeBoss, powerOverride)
-            logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
-
-            if (multiplier === 0) {
-              logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`))
-            } else {
-              let finalDmg = damage
-
-              // 어시스트 보정
-              if (isAssistCaster) finalDmg = Math.floor(finalDmg * 1.15)
-
-              // 전기 충전 보정
-              const chargedMult = (myPkmn.charged && moveInfo?.type === "전기") ? 1.2 : 1.0
-              myPkmn.charged = false
-              if (chargedMult > 1) {
-                finalDmg = Math.floor(finalDmg * chargedMult)
-                logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!"))
-              }
-
-              finalDmg = Math.max(1, finalDmg)
-              data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - finalDmg)
-
-              logEntries.push(makeLog("hit", "", { defender: "boss" }))
-              logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
-              if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
-              if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
-              if (minRoll)        logEntries.push(makeLog("after_hit", `${minDice}! (최소 피해 보장)`))
-              else if (critical)  logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
-              if (isAssistCaster) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
-
-              if (data.boss_current_hp <= 0)
-                logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
-
-              // 흡수
-              if (moveInfo?.effect?.drain && finalDmg > 0) {
-                const heal = Math.max(1, Math.floor(finalDmg * moveInfo.effect.drain))
-                myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-                logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-              }
-              // 반동
-              if (moveInfo?.effect?.recoil && finalDmg > 0) {
-                const recoil = Math.max(1, Math.floor(finalDmg * moveInfo.effect.recoil))
-                myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
-                logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${recoil} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+          if (!specialAtk.handled) {
+            // 일반 공격 → 보스
+            const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+            if (!hit) {
+              logEntries.push(makeLog("normal", hitType === "evaded" ? `${bossName}${josa(bossName, "이가")} 피했다!` : `${myPkmn.name}의 공격은 빗나갔다!`))
+              if (moveInfo?.jumpKick) {
+                const selfDmg = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.25))
+                myPkmn.hp = Math.max(0, myPkmn.hp - selfDmg)
+                logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${selfDmg} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
                 if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
               }
-              // 보스 상태이상
-              applyMoveEffect(moveInfo?.effect, myPkmn, fakeBoss, finalDmg).forEach(m => {
-                if (m.includes("상태")) {
-                  data.boss_status = moveInfo.effect?.status ?? null
+            } else {
+              let powerOverride = null
+              if (moveInfo?.waterspout) {
+                const hpRatio = myPkmn.hp / (myPkmn.maxHp ?? myPkmn.hp)
+                powerOverride = hpRatio <= 0.2 ? 30 : hpRatio <= 0.5 ? 40 : hpRatio <= 0.7 ? 50 : hpRatio <= 0.9 ? 60 : 70
+              }
+
+              const { damage, multiplier, critical, dice, minRoll, minDice } = calcDamage(myPkmn, moveData.name, fakeBoss, powerOverride)
+              logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
+
+              if (multiplier === 0) {
+                logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`))
+              } else {
+                let finalDmg = damage
+
+                // 어시스트 보정
+                if (isAssistCaster) finalDmg = Math.floor(finalDmg * 1.15)
+
+                // 전기 충전 보정
+                const chargedMult = (myPkmn.charged && moveInfo?.type === "전기") ? 1.2 : 1.0
+                myPkmn.charged = false
+                if (chargedMult > 1) {
+                  finalDmg = Math.floor(finalDmg * chargedMult)
+                  logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!"))
                 }
-                logEntries.push(makeLog("normal", m))
-              })
-              // 하이퍼빔
-              if (moveInfo?.hyperBeam) myPkmn.hyperBeamState = true
-              // 유턴
-              if (moveInfo?.uTurn) {
-                const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
-                if (canSwitch) {
-                  await writeLogs(roomId, logEntries)
-                  await roomRef.update({
-                    ...buildRaidEntryUpdate(entries),
-                    boss_current_hp: data.boss_current_hp,
-                    current_order:   [mySlot, ...(data.current_order ?? []).slice(1)],
-                    turn_count:      data.turn_count ?? 1,
-                    turn_started_at: data.turn_started_at,
-                    [`force_switch_${mySlot}`]: true,
-                  })
-                  return res.status(200).json({ ok: true })
+
+                finalDmg = Math.max(1, finalDmg)
+                data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - finalDmg)
+
+                logEntries.push(makeLog("hit", "", { defender: "boss" }))
+                logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
+                if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+                if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
+                if (minRoll)        logEntries.push(makeLog("after_hit", `${minDice}! (최소 피해 보장)`))
+                else if (critical)  logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+                if (isAssistCaster) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
+
+                if (data.boss_current_hp <= 0)
+                  logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
+
+                // 흡수
+                if (moveInfo?.effect?.drain && finalDmg > 0) {
+                  const heal = Math.max(1, Math.floor(finalDmg * moveInfo.effect.drain))
+                  myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
+                  logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+                }
+                // 반동
+                if (moveInfo?.effect?.recoil && finalDmg > 0) {
+                  const recoil = Math.max(1, Math.floor(finalDmg * moveInfo.effect.recoil))
+                  myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
+                  logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${recoil} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+                  if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+                }
+                // 보스 상태이상
+                applyMoveEffect(moveInfo?.effect, myPkmn, fakeBoss, finalDmg).forEach(m => {
+                  if (m.includes("상태")) data.boss_status = moveInfo.effect?.status ?? null
+                  logEntries.push(makeLog("normal", m))
+                })
+                // 하이퍼빔
+                if (moveInfo?.hyperBeam) myPkmn.hyperBeamState = true
+                // 유턴
+                if (moveInfo?.uTurn) {
+                  const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
+                  if (canSwitch) {
+                    await writeLogs(roomId, logEntries)
+                    await roomRef.update({
+                      ...buildRaidEntryUpdate(entries),
+                      boss_current_hp: data.boss_current_hp,
+                      current_order:   [mySlot, ...(data.current_order ?? []).slice(1)],
+                      turn_count:      data.turn_count ?? 1,
+                      turn_started_at: data.turn_started_at,
+                      [`force_switch_${mySlot}`]: true,
+                    })
+                    return res.status(200).json({ ok: true })
+                  }
+                }
+
+                // ── aoe: 아군 피해 ─────────────────────────────────
+                if (data.boss_current_hp > 0) {
+                  applyAoeFriendlyFire(myPkmn, mySlot, moveData.name, entries, data, logEntries)
                 }
               }
+            }
+          } else {
+            // 특수 공격 처리됨 → aoe 아군 피해 적용
+            if (specialAtk.damage > 0 && data.boss_current_hp > 0) {
+              applyAoeFriendlyFire(myPkmn, mySlot, moveData.name, entries, data, logEntries)
             }
           }
         }
@@ -815,7 +1315,7 @@ export default async function handler(req, res) {
     assistUpdate.assist_used         = true
   }
 
-  // ── 싱크로 소비 (이 턴에 sync_active가 false로 바뀌었으면 used 처리) ─
+  // ── 싱크로 소비 ─────────────────────────────────────────────────
   const syncUpdate = {}
   if (!data.sync_active && (data.sync_active !== (snap.data()?.sync_active))) {
     syncUpdate.sync_active = false
