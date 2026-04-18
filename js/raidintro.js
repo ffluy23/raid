@@ -50,6 +50,8 @@ async function loadBossData(bossName) {
   }
 }
 
+const RAID_BG = "https://urgent-amethyst-ykrwrgxwfi.edgeone.app/%EB%A0%88%EC%9D%B4%EB%93%9C%20%EB%92%B7%EB%B0%B0%EA%B2%BD.jpg"
+
 function applyBossPortrait(portraitUrl) {
   if (!portraitUrl) return
   // 보스 초상화 적용
@@ -61,12 +63,14 @@ function applyBossPortrait(portraitUrl) {
     const ph = img.previousElementSibling
     if (ph) ph.style.display = "none"
   }
-  // 배경도 보스 이미지로
-  document.body.style.backgroundImage = `url('${portraitUrl}')`
-  document.body.style.backgroundSize = "cover"
-  document.body.style.backgroundPosition = "center"
-  document.body.style.backgroundRepeat = "no-repeat"
-  bgApplied = true
+  // 배경은 고정 이미지
+  if (!bgApplied) {
+    document.body.style.backgroundImage = `url('${RAID_BG}')`
+    document.body.style.backgroundSize = "cover"
+    document.body.style.backgroundPosition = "center"
+    document.body.style.backgroundRepeat = "no-repeat"
+    bgApplied = true
+  }
 }
 
 function startBgm(url) {
@@ -118,8 +122,8 @@ function bindTouch() {
 async function onTouched() {
   const snap     = await getDoc(roomRef)
   const room     = snap.data()
-  const bossName = room?.boss_name ?? null
-  const bossData = await loadBossData(bossName)
+  const bossId   = room?.boss_id   ?? null
+  const bossData = await loadBossData(bossId)
 
   // BGM — 터치 컨텍스트 안에서 재생
   if (bossData?.bgm) startBgm(bossData.bgm)
@@ -212,10 +216,17 @@ async function skipIntro() {
   // 보스 데이터 복원
   const snap     = await getDoc(roomRef)
   const room     = snap.data()
-  const bossName = room?.boss_name ?? null
-  const bossData = await loadBossData(bossName)
+  const bossId   = room?.boss_id   ?? null
+  const bossData = await loadBossData(bossId)
 
-  if (bossData?.portrait && !bgApplied) applyBossPortrait(bossData.portrait)
+  if (bossData?.portrait) applyBossPortrait(bossData.portrait)
+  if (!bgApplied) {
+    document.body.style.backgroundImage = `url('${RAID_BG}')`
+    document.body.style.backgroundSize = "cover"
+    document.body.style.backgroundPosition = "center"
+    document.body.style.backgroundRepeat = "no-repeat"
+    bgApplied = true
+  }
 
   if (bossData?.bgm) {
     const audio = new Audio(bossData.bgm)
