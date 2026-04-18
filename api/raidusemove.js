@@ -172,16 +172,16 @@ function calcDamage(atk, moveName, def, powerOverride = null, diceOverride = nul
 //  독침붕 타겟 관련 유틸
 // ════════════════════════════════════════════════════════════════════
 
-// boss_beedrills 배열에서 독침붕 객체 반환
+// Beedrill 배열에서 독침붕 객체 반환
 function getBeedrill(data, slot) {
   const idx = parseInt(slot.replace("beedrill_", ""), 10)
-  return (data.boss_beedrills ?? [])[idx] ?? null
+  return (data.Beedrill ?? [])[idx] ?? null
 }
 
-// 독침붕 데미지 적용 (boss_beedrills 배열 직접 수정)
+// 독침붕 데미지 적용 (Beedrill 배열 직접 수정)
 function applyDamageToBeedrill(data, slot, dmg, logEntries) {
   const idx      = parseInt(slot.replace("beedrill_", ""), 10)
-  const beedrills = data.boss_beedrills ?? []
+  const beedrills = data.Beedrill ?? []
   const bee       = beedrills[idx]
   if (!bee || bee.hp <= 0) return
 
@@ -201,7 +201,7 @@ function applyDamageToBeedrill(data, slot, dmg, logEntries) {
 
 // 독침붕이 1마리라도 살아있는지
 function anyBeedrillAlive(data) {
-  return (data.boss_beedrills ?? []).some(b => b.hp > 0)
+  return (data.Beedrill ?? []).some(b => b.hp > 0)
 }
 
 // 독침붕 대상 공격인지 검사 + 비퀸 직접 공격 차단
@@ -312,7 +312,7 @@ function attackBeedrill(myPkmn, mySlot, beeSlot, moveName, moveInfo, data, logEn
 
 // ── 독침붕 대상 광역 공격 (aoe: true인 기술) ────────────────────────
 function attackAllBeedrills(myPkmn, mySlot, moveName, moveInfo, data, logEntries, opts = {}) {
-  const beedrills = data.boss_beedrills ?? []
+  const beedrills = data.Beedrill ?? []
   let totalDmg = 0
   beedrills.forEach((bee, i) => {
     if (bee.hp <= 0) return
@@ -471,7 +471,7 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, extraUpdat
     boss_rank:       data.boss_rank       ?? defaultRanks(),
     boss_status:     data.boss_status     ?? null,
     boss_volatile:   data.boss_volatile   ?? {},
-    boss_beedrills:  data.boss_beedrills  ?? [],
+    Beedrill:  data.Beedrill  ?? [],
     sync_active:     data.sync_active     ?? false,
     current_order:   newOrder,
     turn_count:      (data.turn_count ?? 1) + 1,
@@ -704,7 +704,7 @@ export default async function handler(req, res) {
       } else {
         // 참기 반격: 독침붕이 살아있으면 독침붕 전체, 아니면 보스
         if (anyBeedrillAlive(data)) {
-          ;(data.boss_beedrills ?? []).forEach((bee, i) => {
+          ;(data.Beedrill ?? []).forEach((bee, i) => {
             if (bee.hp <= 0) return
             applyDamageToBeedrill(data, `beedrill_${i}`, bideDmg, logEntries)
           })
@@ -727,7 +727,7 @@ export default async function handler(req, res) {
     logEntries.push(makeLog("move_announce", `${myPkmn.name}의 구르기! (${rollTurn}번째)`))
     // 구르기도 독침붕 우선
     if (anyBeedrillAlive(data)) {
-      ;(data.boss_beedrills ?? []).forEach((bee, i) => {
+      ;(data.Beedrill ?? []).forEach((bee, i) => {
         if (bee.hp <= 0) return
         const defTypes = Array.isArray(bee.type) ? bee.type : [bee.type]
         let mult = 1; for (const dt of defTypes) mult *= getTypeMultiplier("바위", dt)
@@ -768,7 +768,7 @@ export default async function handler(req, res) {
     logEntries.push(makeLog("move_announce", `${myPkmn.name}의 ${state.moveName}!`))
     // 역린도 독침붕 우선
     if (anyBeedrillAlive(data)) {
-      ;(data.boss_beedrills ?? []).forEach((bee, i) => {
+      ;(data.Beedrill ?? []).forEach((bee, i) => {
         if (bee.hp <= 0) return
         const { damage, multiplier, critical } = calcDamageToBeedrill(myPkmn, state.moveName, bee, null)
         if (multiplier === 0) { logEntries.push(makeLog("normal", `독침붕에게는 효과가 없다…`)); return }
@@ -915,7 +915,7 @@ export default async function handler(req, res) {
                 await roomRef.update({
                   ...buildRaidEntryUpdate(entries),
                   boss_current_hp:  data.boss_current_hp,
-                  boss_beedrills:   data.boss_beedrills ?? [],
+                  Beedrill:   data.Beedrill ?? [],
                   current_order:    [mySlot, ...(data.current_order ?? []).slice(1)],
                   turn_count:       data.turn_count ?? 1,
                   turn_started_at:  data.turn_started_at,
@@ -985,7 +985,7 @@ export default async function handler(req, res) {
                     await roomRef.update({
                       ...buildRaidEntryUpdate(entries),
                       boss_current_hp: data.boss_current_hp,
-                      boss_beedrills:  data.boss_beedrills ?? [],
+                      Beedrill:  data.Beedrill ?? [],
                       current_order:   [mySlot, ...(data.current_order ?? []).slice(1)],
                       turn_count:      data.turn_count ?? 1,
                       turn_started_at: data.turn_started_at,
@@ -1023,7 +1023,7 @@ export default async function handler(req, res) {
     boss_status:     data.boss_status     ?? null,
     boss_volatile:   data.boss_volatile   ?? {},
     boss_last_move:  data.boss_last_move  ?? null,
-    boss_beedrills:  data.boss_beedrills  ?? [],
+    Beedrill:  data.Beedrill  ?? [],
     sync_active:     data.sync_active     ?? false,
     current_order:   newOrder,
     turn_count:      (data.turn_count ?? 1) + 1,

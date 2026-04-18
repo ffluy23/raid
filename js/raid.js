@@ -55,9 +55,12 @@ let isSpectator    = new URLSearchParams(location.search).get("spectator") === "
 let logQueue        = []
 let isProcessing    = false
 let pendingRoomData = null
-
-// 최신 룸 데이터 — 가방 모달에서 참조
 let currentRoomData = null
+
+// 독침붕 타겟 선택 상태
+let pendingMoveIdx     = -1
+let pendingMoveInfo    = null
+let beedrillTargetMode = false
 
 const TYPE_COLORS = {
   "노말":"#949495","불":"#e56c3e","물":"#5185c5","전기":"#fbb917","풀":"#66a945",
@@ -67,19 +70,19 @@ const TYPE_COLORS = {
 }
 
 let lastTurnSlot = null
-
 const PLAYER_SLOTS = ["p1", "p2", "p3"]
 
 function $(id) { return document.getElementById(id) }
 function rollD10() { return Math.floor(Math.random() * 10) + 1 }
 function wait(ms)  { return new Promise(r => setTimeout(r, ms)) }
 
-// ── 슬롯 유틸 ───────────────────────────────────────────────────────
-function otherPlayerSlots() {
-  return PLAYER_SLOTS.filter(s => s !== mySlot)
-}
-
+function otherPlayerSlots() { return PLAYER_SLOTS.filter(s => s !== mySlot) }
 function isPlayerSlot(slot) { return PLAYER_SLOTS.includes(slot) }
+function isBeedrillSlot(slot) { return slot === "beedrill_0" || slot === "beedrill_1" }
+
+function anyBeedrillAlive(data) {
+  return (data.Beedrill ?? []).some(b => b.hp > 0)
+}
 
 function isAllPlayersDead(data) {
   return PLAYER_SLOTS.every(s => {
@@ -95,11 +98,11 @@ function cannotRequestSupport(data) {
   return !myPkmn || myPkmn.hp <= 0
 }
 
-// ── slotToPrefix ────────────────────────────────────────────────────
 const SPECTATOR_PREFIX = { p1: "my", p2: "ally1", p3: "ally2" }
 
 function slotToPrefix(slot) {
   if (slot === "boss") return "boss"
+  if (isBeedrillSlot(slot)) return null  // 독침붕은 별도 UI
   if (!mySlot) return SPECTATOR_PREFIX[slot] ?? null
   if (slot === mySlot) return "my"
   const others = otherPlayerSlots()
@@ -126,6 +129,8 @@ function updatePortrait(prefix, pokemon) {
     return
   }
   if (ph) ph.style.display = "none"
+  if (img.dataset.loadedSrc === pokemon.portrait) return
+  img.dataset.loadedSrc = pokemon.portrait
   img.classList.remove("visible")
   img.style.display = "block"; img.src = pokemon.portrait; img.alt = pokemon.name
   setTimeout(() => img.classList.add("visible"), 60)
@@ -160,7 +165,7 @@ function updateSlotUI(slot, data) {
 // ── 보스 UI ──────────────────────────────────────────────────────────
 function updateBossUI(data) {
   const bossHp    = data.boss_current_hp ?? 0
-  const bossMaxHp = data.boss_max_hp     ?? 1
+  const bossMaxHp = data.hp              ?? 1
   const bossName  = data.boss_name       ?? "보스"
 
   const nameEl = $("boss-name")
@@ -197,12 +202,90 @@ function updateBossUI(data) {
   if (rankEl) {
     const rank = data.boss_rank ?? {}
     const tags = []
-    if (rank.atk > 0) tags.push(`공+${rank.atk}`)
-    else if (rank.atk < 0) tags.push(`공${rank.atk}`)
-    if (rank.def > 0) tags.push(`방+${rank.def}`)
-    else if (rank.def < 0) tags.push(`방${rank.def}`)
+    if ((rank.atk ?? 0) > 0) tags.push(`공+${rank.atk}`)
+    else if ((rank.atk ?? 0) < 0) tags.push(`공${rank.atk}`)
+    if ((rank.def ?? 0) > 0) tags.push(`방+${rank.def}`)
+    else if ((rank.def ?? 0) < 0) tags.push(`방${rank.def}`)
     rankEl.innerText = tags.join(" / ")
   }
+}
+
+// ── 독침붕 UI ────────────────────────────────────────────────────────
+function updateBeedrillUI(data) {
+  const beedrills = data.Beedrill ?? []
+  const row       = $("beedrill-row")
+  if (!row) return
+
+  if (beedrills.length === 0) {
+    row.classList.remove("visible")
+    return
+  }
+  row.classList.add("visible")
+
+  beedrills.forEach((bee, i) => {
+    const card     = $(`beedrill-card-${i}`)
+    const hpBar    = $(`beedrill-hp-bar-${i}`)
+    const hpNum    = $(`beedrill-hp-num-${i}`)
+    const rankEl   = $(`beedrill-rank-${i}`)
+    const portrait = $(`beedrill-portrait-${i}`)
+    if (!card) return
+
+    const pct = (bee.maxHp ?? bee.hp) > 0
+      ? Math.max(0, bee.hp / (bee.maxHp ?? bee.hp) * 100) : 0
+
+    card.classList.toggle("fainted", bee.hp <= 0)
+
+    if (hpBar) {
+      hpBar.style.width           = `${pct}%`
+      hpBar.style.backgroundColor = pct > 50 ? "#c0a020" : pct > 20 ? "#e67e22" : "#e74c3c"
+    }
+    if (hpNum) hpNum.textContent = `${bee.hp}/${bee.maxHp ?? bee.hp}`
+    if (rankEl) {
+      const def = bee.ranks?.def ?? 0
+      rankEl.textContent = def !== 0 ? `방어 ${def > 0 ? "+" : ""}${def}` : ""
+    }
+    if (portrait && bee.portrait && portrait.dataset.loadedSrc !== bee.portrait) {
+      portrait.dataset.loadedSrc = bee.portrait
+      portrait.src               = bee.portrait
+      portrait.style.display     = "block"
+      setTimeout(() => portrait.classList.add("visible"), 60)
+    }
+  })
+}
+
+// ── 독침붕 타겟 선택 모드 ────────────────────────────────────────────
+function enterBeedrillTargetMode(data) {
+  beedrillTargetMode = true
+  const hint = $("beedrill-target-hint")
+  if (hint) hint.style.display = "block"
+
+  const beedrills = data.Beedrill ?? []
+  beedrills.forEach((bee, i) => {
+    const card = $(`beedrill-card-${i}`)
+    if (!card || bee.hp <= 0) return
+    card.classList.add("targetable")
+    card.onclick = () => {
+      exitBeedrillTargetMode(data)
+      doUseMove(pendingMoveIdx, [`beedrill_${i}`], data)
+    }
+  })
+}
+
+function exitBeedrillTargetMode(data) {
+  beedrillTargetMode = false
+  const hint = $("beedrill-target-hint")
+  if (hint) hint.style.display = "none"
+
+  const beedrills = data.Beedrill ?? []
+  beedrills.forEach((_, i) => {
+    const card = $(`beedrill-card-${i}`)
+    if (!card) return
+    card.classList.remove("targetable")
+    card.onclick = null
+  })
+
+  pendingMoveIdx  = -1
+  pendingMoveInfo = null
 }
 
 // ── 자동 행동 ────────────────────────────────────────────────────────
@@ -223,6 +306,19 @@ function triggerAutoAction(data) {
   const { mv, i: moveIdx } = usable[Math.floor(Math.random() * usable.length)]
   const moveInfo = moves[mv.name] ?? {}
 
+  // 독침붕 살아있으면 독침붕 랜덤 타겟
+  if (anyBeedrillAlive(data)) {
+    const aliveBees = (data.Beedrill ?? [])
+      .map((b, i) => ({ b, i }))
+      .filter(({ b }) => b.hp > 0)
+    if (aliveBees.length > 0) {
+      const { i: bIdx } = aliveBees[Math.floor(Math.random() * aliveBees.length)]
+      const tSlot = moveInfo.aoe ? [] : [`beedrill_${bIdx}`]
+      doUseMove(moveIdx, tSlot, data)
+      return
+    }
+  }
+
   if (moveInfo.aoe || moveInfo.aoeEnemy) {
     doUseMove(moveIdx, ["boss"], data); return
   }
@@ -233,11 +329,7 @@ function triggerAutoAction(data) {
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
 
-  if (needsTarget) {
-    doUseMove(moveIdx, ["boss"], data)
-  } else {
-    doUseMove(moveIdx, [], data)
-  }
+  doUseMove(moveIdx, needsTarget ? ["boss"] : [], data)
 }
 
 // ── 로그 처리 ────────────────────────────────────────────────────────
@@ -260,16 +352,65 @@ async function handleLogEntry(entry) {
     }
     case "hit": {
       if (!meta?.defender) break
-      const prefix = slotToPrefix(meta.defender)
-      if (prefix) { await triggerAttackEffect(prefix); await triggerBlink(prefix) }
+      if (isBeedrillSlot(meta.defender)) {
+        // 독침붕 피격 이펙트
+        const card = $(`beedrill-card-${meta.defender.replace("beedrill_", "")}`)
+        if (card) {
+          card.classList.remove("defender-hit"); void card.offsetWidth
+          card.classList.add("defender-hit")
+          await new Promise(r => card.addEventListener("animationend", r, { once: true }))
+        }
+      } else {
+        const prefix = slotToPrefix(meta.defender)
+        if (prefix) { await triggerAttackEffect(prefix); await triggerBlink(prefix) }
+      }
       break
     }
     case "hp": {
       if (!meta?.slot) break
-      const prefix  = slotToPrefix(meta.slot)
-      if (!prefix) break
-      const showNum = prefix === "my" || prefix === "boss"
-      await animateHpBar(prefix, meta.hp, meta.maxHp, showNum)
+      if (isBeedrillSlot(meta.slot)) {
+        // 독침붕 HP 애니메이션
+        const idx    = parseInt(meta.slot.replace("beedrill_", ""), 10)
+        const hpBar  = $(`beedrill-hp-bar-${idx}`)
+        const hpNum  = $(`beedrill-hp-num-${idx}`)
+        const card   = $(`beedrill-card-${idx}`)
+        if (hpBar && meta.maxHp > 0) {
+          const pct = Math.max(0, meta.hp / meta.maxHp * 100)
+          hpBar.style.width           = `${pct}%`
+          hpBar.style.backgroundColor = pct > 50 ? "#c0a020" : pct > 20 ? "#e67e22" : "#e74c3c"
+        }
+        if (hpNum) hpNum.textContent = `${meta.hp}/${meta.maxHp}`
+        if (text) await typeText(logEl, text)
+      } else {
+        const prefix  = slotToPrefix(meta.slot)
+        if (!prefix) break
+        const showNum = prefix === "my" || prefix === "boss"
+        await animateHpBar(prefix, meta.hp, meta.maxHp, showNum)
+        if (text) await typeText(logEl, text)
+      }
+      await wait(100)
+      break
+    }
+    case "beedrill_summon": {
+      // 소환 로그 — UI는 pendingRoomData applyRoomData에서 처리
+      if (text) await typeText(logEl, text)
+      await wait(200)
+      break
+    }
+    case "beedrill_hp": {
+      // 독침붕 전체 HP 갱신 (방어지령/회복지령 후)
+      if (meta?.beedrills) {
+        meta.beedrills.forEach((bee, i) => {
+          const hpBar = $(`beedrill-hp-bar-${i}`)
+          const hpNum = $(`beedrill-hp-num-${i}`)
+          if (!hpBar) return
+          const pct = (bee.maxHp ?? bee.hp) > 0
+            ? Math.max(0, bee.hp / (bee.maxHp ?? bee.hp) * 100) : 0
+          hpBar.style.width           = `${pct}%`
+          hpBar.style.backgroundColor = pct > 50 ? "#c0a020" : pct > 20 ? "#e67e22" : "#e74c3c"
+          if (hpNum) hpNum.textContent = `${bee.hp}/${bee.maxHp ?? bee.hp}`
+        })
+      }
       if (text) await typeText(logEl, text)
       await wait(100)
       break
@@ -278,7 +419,6 @@ async function handleLogEntry(entry) {
     case "sync":    { await showSyncAnimation();    break }
     case "umbreon": { await showUmbreonAnimation(); break }
     case "revive": {
-      // 기력의덩어리 부활 처리 — fainted 클래스 제거
       if (meta?.slot) {
         const prefix = slotToPrefix(meta.slot)
         const area   = $(`${prefix}-pokemon-area`)
@@ -291,9 +431,15 @@ async function handleLogEntry(entry) {
     case "faint": {
       if (text) await typeText(logEl, text)
       if (meta?.slot) {
-        const prefix = slotToPrefix(meta.slot)
-        const area   = $(`${prefix}-pokemon-area`)
-        if (area) area.classList.add("fainted")
+        if (isBeedrillSlot(meta.slot)) {
+          const idx  = parseInt(meta.slot.replace("beedrill_", ""), 10)
+          const card = $(`beedrill-card-${idx}`)
+          if (card) card.classList.add("fainted")
+        } else {
+          const prefix = slotToPrefix(meta.slot)
+          const area   = $(`${prefix}-pokemon-area`)
+          if (area) area.classList.add("fainted")
+        }
       }
       await wait(300)
       break
@@ -472,15 +618,12 @@ function showSyncAnimation() {
   })
 }
 
-// ── 블래키 Override! 애니메이션 ──────────────────────────────────────
 function showUmbreonAnimation() {
   return new Promise(resolve => {
     const el      = $("umbreon-anim")
     const wrapper = $("battle-wrapper")
     if (!el) { resolve(); return }
-
     playSound(SFX_DICE)
-
     if (wrapper) {
       let shakeCount = 0
       const doShake = () => {
@@ -494,7 +637,6 @@ function showUmbreonAnimation() {
       }
       doShake()
     }
-
     el.classList.remove("umbreon-show"); void el.offsetWidth; el.classList.add("umbreon-show")
     setTimeout(resolve, 1400)
   })
@@ -558,13 +700,28 @@ function updateMoveButtons(data) {
   }
 }
 
-let pendingMoveIdx = -1
-
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
 
-  if (moveInfo?.outrage) { doUseMove(idx, ["boss"], data); return }
-  if (moveInfo?.aoe || moveInfo?.aoeEnemy) { doUseMove(idx, ["boss"], data); return }
+  const hasBeedrills = anyBeedrillAlive(data)
+
+  // aoe 기술: 독침붕 있으면 독침붕 전원, 없으면 보스
+  if (moveInfo?.aoe || moveInfo?.aoeEnemy) {
+    doUseMove(idx, hasBeedrills ? [] : ["boss"], data)
+    return
+  }
+
+  if (moveInfo?.outrage) {
+    if (hasBeedrills) {
+      // 역린 → 독침붕 랜덤
+      const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
+      const { i: bIdx } = aliveBees[Math.floor(Math.random() * aliveBees.length)]
+      doUseMove(idx, [`beedrill_${bIdx}`], data)
+    } else {
+      doUseMove(idx, ["boss"], data)
+    }
+    return
+  }
 
   const r = moveInfo?.rank
   const targetsEnemy =
@@ -577,11 +734,30 @@ function onMoveClick(idx, moveInfo, data) {
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
     || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
 
-  if (targetsEnemy) {
-    doUseMove(idx, ["boss"], data)
-  } else {
+  if (!targetsEnemy) {
+    // 자기/아군 대상 기술 → 독침붕 관계없이 그냥 사용
     doUseMove(idx, [], data)
+    return
   }
+
+  // 공격 기술인데 독침붕이 살아있음 → 독침붕 타겟 선택
+  if (hasBeedrills) {
+    const aliveBees = (data.Beedrill ?? []).filter(b => b.hp > 0)
+    if (aliveBees.length === 1) {
+      // 살아있는 독침붕이 1마리면 바로
+      const bIdx = (data.Beedrill ?? []).findIndex(b => b.hp > 0)
+      doUseMove(idx, [`beedrill_${bIdx}`], data)
+    } else {
+      // 2마리 다 살아있으면 선택 모드
+      pendingMoveIdx  = idx
+      pendingMoveInfo = moveInfo
+      enterBeedrillTargetMode(data)
+    }
+    return
+  }
+
+  // 독침붕 없으면 보스
+  doUseMove(idx, ["boss"], data)
 }
 
 async function doUseMove(moveIdx, targetSlots, data) {
@@ -616,33 +792,18 @@ async function doUseItem(itemName, targetIdx, data) {
 function updateBagButton(data) {
   const btn = $("bag-btn")
   if (!btn) return
-
-  // 배지 업데이트
   updateBagBadge("bag-btn", data.inventory ?? {})
-
-  if (isSpectator || gameOver) {
-    btn.disabled = true
-    return
-  }
-
+  if (isSpectator || gameOver) { btn.disabled = true; return }
   const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-  const fainted      = !myActivePkmn || myActivePkmn.hp <= 0
-
-  // 내 턴이고 아직 행동 안 했고 살아있을 때만 활성화
-  // (단, 기절한 파티 포켓몬에 기력의덩어리 쓰는 건 가능하니 살아있는 파티원이 있으면 됨)
   const hasAliveInParty = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
   const canOpen = myTurn && !actionDone && hasAliveInParty
-
   btn.disabled = !canOpen
   btn.onclick  = canOpen
     ? () => {
         playSound(SFX_BTN)
         openItemModal(
-          currentRoomData,
-          mySlot,
-          myTurn,
-          actionDone,
+          currentRoomData, mySlot, myTurn, actionDone,
           (itemName, targetIdx) => doUseItem(itemName, targetIdx, currentRoomData)
         )
       }
@@ -654,7 +815,6 @@ function updateBenchButtons(data) {
   const bench = $("bench-container")
   if (!bench) return
   bench.innerHTML = ""
-
   const myEntry      = data[`${mySlot}_entry`] ?? []
   const activeIdx    = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = myEntry[activeIdx]
@@ -766,8 +926,7 @@ function updateAssistUI(data) {
 
   const reqBtn = $("assist-request-btn")
   if (reqBtn) {
-    const isMyReq     = req?.from === mySlot
-    const alreadyAgreed = req?.agrees?.includes(mySlot)
+    const isMyReq = req?.from === mySlot
     if (isSpectator || used || assist || allDead || blocked) {
       reqBtn.disabled  = true
       reqBtn.innerText = allDead ? "사용 불가" : assist ? "🤝 어시스트 중" : used ? "지원 완료" : "요청 불가"
@@ -887,6 +1046,7 @@ function applyRoomData(data) {
 
   PLAYER_SLOTS.forEach(s => updateSlotUI(s, data))
   updateBossUI(data)
+  updateBeedrillUI(data)
   updateOrderDisplay(data)
   updateTurnUI(data)
   if (!isSpectator) {
@@ -933,7 +1093,6 @@ function listenRoom() {
 
     const order           = data.current_order ?? []
     const currentTurnSlot = order[0] ?? null
-
     lastTurnSlot = currentTurnSlot
 
     if (!isSpectator && !data.game_over) {
@@ -943,8 +1102,9 @@ function listenRoom() {
 
       if (!wasMyTurn && isMyTurnNow) {
         actionDone = false
-        // 내 턴이 돌아오면 열려있던 모달 닫기
         closeItemModal()
+        // 타겟 선택 모드 해제
+        if (beedrillTargetMode) exitBeedrillTargetMode(data)
       }
 
       if (myTurn && !actionDone) {
@@ -964,7 +1124,15 @@ function listenRoom() {
               .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
             if (outrageMoveIdx !== -1) {
               actionDone = true
-              _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: ["boss"] })
+              // 역린도 독침붕 우선
+              const hasBees = anyBeedrillAlive(data)
+              let tSlots = ["boss"]
+              if (hasBees) {
+                const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
+                const { i: bIdx } = aliveBees[Math.floor(Math.random() * aliveBees.length)]
+                tSlots = [`beedrill_${bIdx}`]
+              }
+              _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: tSlots })
                 .catch(e => { console.warn("역린 자동처리 오류:", e.message); actionDone = false })
               return
             }
@@ -976,7 +1144,15 @@ function listenRoom() {
           const needsAutoDive = myActivePkmn?.ghostDiveState?.diving
           if (!actionDone && (needsAutoMove || needsAutoFly || needsAutoDig || needsAutoDive || myActivePkmn?.hyperBeamState)) {
             actionDone = true
-            _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: ["boss"] })
+            // 자동처리 기술도 독침붕 우선
+            const hasBees = anyBeedrillAlive(data)
+            let tSlots = ["boss"]
+            if (hasBees) {
+              const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
+              const { i: bIdx } = aliveBees[Math.floor(Math.random() * aliveBees.length)]
+              tSlots = [`beedrill_${bIdx}`]
+            }
+            _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: tSlots })
               .catch(e => { console.warn("자동처리 오류:", e.message); actionDone = false })
           }
         }
@@ -987,18 +1163,17 @@ function listenRoom() {
       }
     }
 
-    // 기절 시 즉시 교체 버튼 활성화 (단, 내 턴이거나 forceSwitch일 때만)
-if (!isSpectator && !data.game_over && mySlot) {
-  const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
-  const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-  const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
-  const hasAlive     = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
-  const forceSwitch  = !!data[`force_switch_${mySlot}`]
-  if (isFainted && hasAlive && (forceSwitch || myTurn)) {
-    updateBenchButtons(data)
-    updateTurnUI(data)
-  }
-}
+    if (!isSpectator && !data.game_over && mySlot) {
+      const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
+      const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
+      const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
+      const hasAlive     = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
+      const forceSwitch  = !!data[`force_switch_${mySlot}`]
+      if (isFainted && hasAlive && (forceSwitch || myTurn)) {
+        updateBenchButtons(data)
+        updateTurnUI(data)
+      }
+    }
 
     if (data.dice_event && data.dice_event.ts > lastDiceEventTs) {
       if (!isProcessing && logQueue.length === 0) {
@@ -1044,7 +1219,6 @@ async function doRejectAssist() {
   try { await _rejectAssist({ roomId: ROOM_ID, mySlot }) }
   catch (e) { console.warn("거절 실패:", e.message) }
 }
-
 async function doRequestSync() {
   if (!myTurn) { alert("자신의 턴에만 동기화 요청할 수 있어!"); return }
   try { await _requestSync({ roomId: ROOM_ID, mySlot }) }
