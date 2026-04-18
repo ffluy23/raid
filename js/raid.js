@@ -165,7 +165,7 @@ function updateSlotUI(slot, data) {
 // ── 보스 UI ──────────────────────────────────────────────────────────
 function updateBossUI(data) {
   const bossHp    = data.boss_current_hp ?? 0
-  const bossMaxHp = data.hp              ?? 1
+  const bossMaxHp = data.boss_max_hp ?? 1
   const bossName  = data.boss_name       ?? "보스"
 
   const nameEl = $("boss-name")
@@ -177,7 +177,7 @@ function updateBossUI(data) {
   const img = $("boss-portrait")
   const ph  = document.querySelector(".boss-portrait-placeholder")
   if (img) {
-    const portrait = data.portrait ?? null
+    const portrait = data.boss_portrait_url ?? null
     if (!portrait) {
       img.classList.remove("visible"); img.style.display = "none"
       if (ph) ph.style.display = "block"
