@@ -1291,24 +1291,24 @@ export default async function handler(req, res) {
                 if (data.boss_current_hp <= 0)
                   logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
 
-                // 흡수
-                if (moveInfo?.effect?.drain && finalDmg > 0) {
-                  const heal = Math.max(1, Math.floor(finalDmg * moveInfo.effect.drain))
-                  myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-                  logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-                }
-                // 반동
-                if (moveInfo?.effect?.recoil && finalDmg > 0) {
-                  const recoil = Math.max(1, Math.floor(finalDmg * moveInfo.effect.recoil))
-                  myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
-                  logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${recoil} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-                  if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
-                }
-                // 보스 상태이상
-                applyMoveEffect(moveInfo?.effect, myPkmn, fakeBoss, finalDmg).forEach(m => {
-                  if (m.includes("상태")) data.boss_status = moveInfo.effect?.status ?? null
-                  logEntries.push(makeLog("normal", m))
-                })
+               // 흡수 (직접 처리)
+if (moveInfo?.effect?.drain && finalDmg > 0) {
+  const heal = Math.max(1, Math.floor(finalDmg * moveInfo.effect.drain))
+  myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
+  logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 체력을 흡수했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+}
+// 반동
+if (moveInfo?.effect?.recoil && finalDmg > 0) {
+  const recoil = Math.max(1, Math.floor(finalDmg * moveInfo.effect.recoil))
+  myPkmn.hp = Math.max(0, myPkmn.hp - recoil)
+  logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} 반동으로 ${recoil} 데미지를 입었다!`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+  if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+}
+// 보스 상태이상만 처리 (drain/recoil 제외)
+applyMoveEffect({ ...moveInfo?.effect, drain: 0, recoil: 0 }, myPkmn, fakeBoss, finalDmg).forEach(m => {
+  if (m.includes("상태")) data.boss_status = moveInfo.effect?.status ?? null
+  logEntries.push(makeLog("normal", m))
+})
                 // 하이퍼빔
                 if (moveInfo?.hyperBeam) myPkmn.hyperBeamState = true
                 // 유턴
