@@ -1,6 +1,7 @@
 // api/raidUseMove.js
 import { db } from "../lib/firestore.js"
 import { executeBossAction, deepCopyEntries as deepCopyRaidEntries2, checkRaidWin as checkRaidWin2, PLAYER_SLOTS as PS } from "../lib/raidBossAction.js"
+import { activateUmbreon } from "../lib/umbreon.js"
 import { moves } from "../lib/moves.js"
 import { getTypeMultiplier } from "../lib/typeChart.js"
 import {
@@ -1209,9 +1210,13 @@ export default async function handler(req, res) {
         const specialResult = handleRaidSpecialNonAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
         if (!specialResult.handled) {
-          // 랭크 변화 등 기본 처리
-          applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
-          applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+          if (moveInfo?.targetSelf === false) {
+            // 적 대상 기술인데 처리 안 됐으면 빗나감
+            logEntries.push(makeLog("normal", `${myPkmn.name}의 공격은 빗나갔다!`))
+          } else {
+            applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
+            applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+          }
         }
 
       } else {
