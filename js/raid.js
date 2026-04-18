@@ -765,7 +765,7 @@ async function doUseMove(moveIdx, targetSlots, data) {
   actionDone = true
   updateMoveButtons(data)
   try {
-    await _useMove({ roomId: ROOM_ID, mySlot, moveIdx, targetSlots })
+    await _useMove({ roomId: ROOM_ID, mySlot, moveIdx: Number(moveIdx), targetSlots })
   } catch (e) {
     console.error("useMove 오류:", e.message)
     actionDone = false; updateMoveButtons(data)
