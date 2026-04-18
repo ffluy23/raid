@@ -606,14 +606,43 @@ function handleRaidSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, 
       const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * moveInfo.effect.heal))
       myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
       logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+      // 생명의물방울: 아군 전원도 회복
+      if (moveInfo.waterHeal) {
+        for (const s of PLAYER_SLOTS) {
+          if (s === mySlot) continue
+          const aIdx  = data[`${s}_active_idx`] ?? 0
+          const aPkmn = entries[s]?.[aIdx]
+          if (!aPkmn || aPkmn.hp <= 0) continue
+          const allyHeal = Math.max(1, Math.floor((aPkmn.maxHp ?? aPkmn.hp) * moveInfo.effect.heal))
+          aPkmn.hp = Math.min(aPkmn.maxHp ?? aPkmn.hp, aPkmn.hp + allyHeal)
+          logEntries.push(makeLog("hp", `${aPkmn.name}${josa(aPkmn.name, "도")} HP를 회복했다! (+${allyHeal})`, { slot: s, hp: aPkmn.hp, maxHp: aPkmn.maxHp }))
+        }
+      }
     } else {
       logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
     }
     return { handled: true }
   }
 
+  if (moveInfo.pollenPuff) {
+    // 아군 대상이면 회복, 보스 대상이면 handleRaidSpecialAttack으로 넘김
+    const allyTarget = tSlots.find(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
+    if (allyTarget) {
+      const aIdx  = data[`${allyTarget}_active_idx`] ?? 0
+      const aPkmn = entries[allyTarget]?.[aIdx]
+      if (aPkmn && aPkmn.hp > 0) {
+        const heal = Math.max(1, Math.floor((aPkmn.maxHp ?? aPkmn.hp) * 0.22))
+        aPkmn.hp   = Math.min(aPkmn.maxHp ?? aPkmn.hp, aPkmn.hp + heal)
+        logEntries.push(makeLog("hp", `${aPkmn.name}${josa(aPkmn.name, "은는")} 꽃가루를 받아 HP를 회복했다! (+${heal})`, { slot: allyTarget, hp: aPkmn.hp, maxHp: aPkmn.maxHp }))
+      }
+      return { handled: true }
+    }
+    // 아군 타겟 없으면 공격 처리로 넘김
+    return { handled: false }
+  }
+
   if (moveInfo.healPulse) {
-    // 아군 회복
+    // tSlots에 아군 슬롯이 넘어오면 그 슬롯 회복 (프론트에서 선택)
     const allyTarget = tSlots.find(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
     if (allyTarget) {
       const aIdx  = data[`${allyTarget}_active_idx`] ?? 0
@@ -623,6 +652,8 @@ function handleRaidSpecialNonAttack(moveInfo, moveName, myPkmn, mySlot, tSlots, 
         aPkmn.hp   = Math.min(aPkmn.maxHp ?? aPkmn.hp, aPkmn.hp + heal)
         logEntries.push(makeLog("hp", `${aPkmn.name}${josa(aPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: allyTarget, hp: aPkmn.hp, maxHp: aPkmn.maxHp }))
       }
+    } else {
+      logEntries.push(makeLog("normal", "회복할 아군이 없다!"))
     }
     return { handled: true }
   }
@@ -903,9 +934,11 @@ function handleRaidSpecialAttack(moveInfo, moveName, myPkmn, mySlot, data, logEn
     return { handled: true, damage }
   }
 
-  // 꽃가루경단 (pollenPuff) - 보스 대상이면 일반 데미지
+  // 꽃가루경단 (pollenPuff) - 아군 대상이면 회복, 보스 대상이면 일반 데미지
   if (moveInfo.pollenPuff) {
-    // 보스는 항상 적 → 일반 처리로 넘김
+    // tSlots에 아군 슬롯이 있으면 회복 처리
+    // (프론트에서 아군 선택 시 tSlots = [allySlot] 으로 넘어옴)
+    // 보스 대상이면 일반 공격 처리로 넘김
     return { handled: false, damage: 0 }
   }
 
@@ -1175,14 +1208,11 @@ export default async function handler(req, res) {
       if (!moveInfo?.power) {
         const specialResult = handleRaidSpecialNonAttack(moveInfo, moveData.name, myPkmn, mySlot, tSlots, entries, data, logEntries)
 
-       if (!specialResult.handled) {
-  if (moveInfo?.targetSelf === false) {
-    logEntries.push(makeLog("normal", `그러나 ${myPkmn.name}의 공격은 빗나갔다!`))
-  } else {
-    applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
-    applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
-  }
-}
+        if (!specialResult.handled) {
+          // 랭크 변화 등 기본 처리
+          applyRankChanges(moveInfo?.rank ?? null, myPkmn, myPkmn, moveData.name, logEntries)
+          applyMoveEffect(moveInfo?.effect, myPkmn, myPkmn, 0).forEach(m => logEntries.push(makeLog("normal", m)))
+        }
 
       } else {
         // ── 공격 기술 ────────────────────────────────────────────

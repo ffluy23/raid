@@ -72,18 +72,10 @@ function $(id) { return document.getElementById(id) }
 function rollD10() { return Math.floor(Math.random() * 10) + 1 }
 function wait(ms)  { return new Promise(r => setTimeout(r, ms)) }
 
-// ── 슬롯 유틸 ───────────────────────────────────────────────────────
-function otherPlayerSlots() {
-  return PLAYER_SLOTS.filter(s => s !== mySlot)
-}
-
-function isPlayerSlot(slot) { return PLAYER_SLOTS.includes(slot) }
+function otherPlayerSlots() { return PLAYER_SLOTS.filter(s => s !== mySlot) }
 
 function isAllPlayersDead(data) {
-  return PLAYER_SLOTS.every(s => {
-    const entry = data[`${s}_entry`] ?? []
-    return entry.every(p => p.hp <= 0)
-  })
+  return PLAYER_SLOTS.every(s => (data[`${s}_entry`] ?? []).every(p => p.hp <= 0))
 }
 
 function cannotRequestSupport(data) {
@@ -93,7 +85,6 @@ function cannotRequestSupport(data) {
   return !myPkmn || myPkmn.hp <= 0
 }
 
-// ── slotToPrefix ────────────────────────────────────────────────────
 const SPECTATOR_PREFIX = { p1: "my", p2: "ally1", p3: "ally2" }
 
 function slotToPrefix(slot) {
@@ -104,7 +95,6 @@ function slotToPrefix(slot) {
   return slot === others[0] ? "ally1" : "ally2"
 }
 
-// ── HP바 / 포트레이트 ────────────────────────────────────────────────
 function updateHpBar(barId, textId, hp, maxHp, showNum) {
   const bar = $(barId), txt = textId ? $(textId) : null
   if (!bar) return
@@ -120,8 +110,7 @@ function updatePortrait(prefix, pokemon) {
   if (!img) return
   if (!pokemon?.portrait) {
     img.classList.remove("visible"); img.style.display = "none"
-    if (ph) ph.style.display = "block"
-    return
+    if (ph) ph.style.display = "block"; return
   }
   if (ph) ph.style.display = "none"
   img.classList.remove("visible")
@@ -129,18 +118,15 @@ function updatePortrait(prefix, pokemon) {
   setTimeout(() => img.classList.add("visible"), 60)
 }
 
-// ── 플레이어 슬롯 UI ─────────────────────────────────────────────────
 function updateSlotUI(slot, data) {
   const prefix = slotToPrefix(slot)
   if (!prefix) return
   const activeIdx = data[`${slot}_active_idx`] ?? 0
   const pokemon   = data[`${slot}_entry`]?.[activeIdx]
   if (!pokemon) return
-
   const slotKey   = slot.replace("p", "player")
   const nameLabel = $(`${prefix}-name-label`)
   if (nameLabel) nameLabel.innerText = data[`${slotKey}_name`] ?? slot
-
   const nameEl = $(`${prefix}-active-name`)
   if (nameEl) {
     const STATUS_LABEL = { "마비":"[마비]","화상":"[화상]","독":"[독]","얼음":"[얼음]" }
@@ -150,127 +136,95 @@ function updateSlotUI(slot, data) {
     const digTag       = pokemon.digState?.digging ? " ⛏" : ""
     nameEl.innerText   = (pokemon.name ?? "???") + statusTag + confusionTag + flyTag + digTag
   }
-
   updateHpBar(`${prefix}-hp-bar`, `${prefix}-active-hp`, pokemon.hp, pokemon.maxHp, prefix === "my")
   updatePortrait(prefix, pokemon)
 }
 
-// ── 보스 UI ──────────────────────────────────────────────────────────
 function updateBossUI(data) {
   const bossHp    = data.boss_current_hp ?? 0
   const bossMaxHp = data.boss_max_hp     ?? 1
   const bossName  = data.boss_name       ?? "보스"
-
-  const nameEl = $("boss-name")
-  if (nameEl) nameEl.innerText = bossName
-
+  const nameEl = $("boss-name"); if (nameEl) nameEl.innerText = bossName
   updateHpBar("boss-hp-bar", "boss-hp-text", bossHp, bossMaxHp, true)
-
-  const statusEl = $("boss-status")
-  if (statusEl) {
-    const s = data.boss_status ?? null
-    statusEl.innerText = s ? `[${s}]` : ""
-  }
-
+  const statusEl = $("boss-status"); if (statusEl) statusEl.innerText = data.boss_status ? `[${data.boss_status}]` : ""
   const rankEl = $("boss-rank")
   if (rankEl) {
     const rank = data.boss_rank ?? {}
     const tags = []
-    if (rank.atk > 0) tags.push(`공+${rank.atk}`)
-    else if (rank.atk < 0) tags.push(`공${rank.atk}`)
-    if (rank.def > 0) tags.push(`방+${rank.def}`)
-    else if (rank.def < 0) tags.push(`방${rank.def}`)
+    if (rank.atk > 0) tags.push(`공+${rank.atk}`); else if (rank.atk < 0) tags.push(`공${rank.atk}`)
+    if (rank.def > 0) tags.push(`방+${rank.def}`); else if (rank.def < 0) tags.push(`방${rank.def}`)
     rankEl.innerText = tags.join(" / ")
   }
 }
 
-// ── 타이머 ───────────────────────────────────────────────────────────
 function updateTimerDisplay() {
-  const el = $("turn-timer")
-  if (!el) return
+  const el = $("turn-timer"); if (!el) return
   const m = Math.floor(timerSecondsLeft / 60)
   const s = timerSecondsLeft % 60
   el.innerText   = `${m}:${String(s).padStart(2, "0")}`
-  el.style.color = timerSecondsLeft <= 10 ? "#f44336"
-                 : timerSecondsLeft <= 20 ? "#ff9800" : "#888"
+  el.style.color = timerSecondsLeft <= 10 ? "#f44336" : timerSecondsLeft <= 20 ? "#ff9800" : "#888"
 }
 
 function startTurnTimer(turnStartedAt, data) {
   clearTurnTimer()
-  const el = $("turn-timer")
-  if (el) el.style.display = "inline"
-  const calcRemaining = () => {
-    const elapsed = Math.floor((Date.now() - turnStartedAt) / 1000)
-    return Math.max(0, TIMER_SECONDS - elapsed)
-  }
-  timerSecondsLeft = calcRemaining()
-  updateTimerDisplay()
+  const el = $("turn-timer"); if (el) el.style.display = "inline"
+  const calcRemaining = () => Math.max(0, TIMER_SECONDS - Math.floor((Date.now() - turnStartedAt) / 1000))
+  timerSecondsLeft = calcRemaining(); updateTimerDisplay()
   timerTickInterval = setInterval(() => {
-    timerSecondsLeft = calcRemaining()
-    updateTimerDisplay()
+    timerSecondsLeft = calcRemaining(); updateTimerDisplay()
     if (timerSecondsLeft <= 0) { clearTurnTimer(); if (!isSpectator) triggerAutoAction(data) }
   }, 1000)
 }
 
 function clearTurnTimer() {
   if (timerTickInterval) { clearInterval(timerTickInterval); timerTickInterval = null }
-  const el = $("turn-timer")
-  if (el) { el.style.display = "none"; el.innerText = "" }
+  const el = $("turn-timer"); if (el) { el.style.display = "none"; el.innerText = "" }
 }
 
-// ── 자동 행동 ────────────────────────────────────────────────────────
 function triggerAutoAction(data) {
   if (actionDone || !myTurn || isSpectator) return
   const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
   const myPkmn      = data[`${mySlot}_entry`]?.[myActiveIdx]
   if (!myPkmn || myPkmn.hp <= 0) return
-
   const movesArr   = myPkmn.moves ?? []
   const chainBound = myPkmn.chainBound ?? null
-  const usable     = movesArr
-    .map((mv, i) => ({ mv, i }))
+  const usable     = movesArr.map((mv, i) => ({ mv, i }))
     .filter(({ mv }) => mv.pp > 0 && !(chainBound && chainBound.moveName === mv.name))
-
   if (usable.length === 0) { actionDone = true; doSkipTurn(true); return }
-
   const { mv, i: moveIdx } = usable[Math.floor(Math.random() * usable.length)]
   const moveInfo = moves[mv.name] ?? {}
-
-  if (moveInfo.aoe || moveInfo.aoeEnemy) {
-    doUseMove(moveIdx, ["boss"], data); return
+  if (moveInfo.aoe || moveInfo.aoeEnemy) { doUseMove(moveIdx, ["boss"], data); return }
+  if (moveInfo.waterHeal) { doUseMove(moveIdx, [], data); return }
+  const r = moveInfo?.rank
+  const needsAllyTarget = moveInfo.healPulse || moveInfo.pollenPuff
+    || (r && r.targetAtk !== undefined && r.targetAtk > 0 && !moveInfo.power)
+  if (needsAllyTarget) {
+    const autoAlly = otherPlayerSlots().find(s => {
+      const idx  = data[`${s}_active_idx`] ?? 0
+      const pkmn = data[`${s}_entry`]?.[idx]
+      return pkmn && pkmn.hp > 0
+    })
+    doUseMove(moveIdx, autoAlly ? [autoAlly] : [], data); return
   }
-
   const needsTarget = moveInfo.power || moveInfo.ghostDive || moveInfo.futureSight
     || moveInfo.taunt || moveInfo.memento || moveInfo.leechSeed || moveInfo.chainBind
-    || moveInfo.poisonPowder || moveInfo.pollenPuff || moveInfo.curse
+    || moveInfo.poisonPowder || moveInfo.curse
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
     || (moveInfo.effect?.status && moveInfo.targetSelf === false)
-
-  if (needsTarget) {
-    doUseMove(moveIdx, ["boss"], data)
-  } else {
-    doUseMove(moveIdx, [], data)
-  }
+  doUseMove(moveIdx, needsTarget ? ["boss"] : [], data)
 }
 
-// ── 로그 처리 ────────────────────────────────────────────────────────
 async function handleLogEntry(entry) {
   const { type, text, meta } = entry
   const logEl = $("battle-log")
   switch (type) {
-    case "normal":
-    case "after_hit":
-    case "move_announce": {
+    case "normal": case "after_hit": case "move_announce": {
       if (!text) break
       await typeText(logEl, text)
       await wait(type === "move_announce" ? 200 : 120)
       break
     }
-    case "dice": {
-      if (!meta) break
-      await animateAttackDice(meta.slot, meta.roll)
-      break
-    }
+    case "dice": { if (meta) await animateAttackDice(meta.slot, meta.roll); break }
     case "hit": {
       if (!meta?.defender) break
       const prefix = slotToPrefix(meta.defender)
@@ -279,13 +233,11 @@ async function handleLogEntry(entry) {
     }
     case "hp": {
       if (!meta?.slot) break
-      const prefix  = slotToPrefix(meta.slot)
-      if (!prefix) break
+      const prefix  = slotToPrefix(meta.slot); if (!prefix) break
       const showNum = prefix === "my" || prefix === "boss"
       await animateHpBar(prefix, meta.hp, meta.maxHp, showNum)
       if (text) await typeText(logEl, text)
-      await wait(100)
-      break
+      await wait(100); break
     }
     case "assist":  { await showAssistAnimation();  break }
     case "sync":    { await showSyncAnimation();    break }
@@ -297,8 +249,7 @@ async function handleLogEntry(entry) {
         const area   = $(`${prefix}-pokemon-area`)
         if (area) area.classList.add("fainted")
       }
-      await wait(300)
-      break
+      await wait(300); break
     }
     default: { if (text) await typeText(logEl, text); break }
   }
@@ -312,8 +263,7 @@ function typeText(logEl, text) {
     const chars = [...text]; let i = 0
     function next() {
       if (i >= chars.length) { logEl.scrollTop = logEl.scrollHeight; resolve(); return }
-      line.textContent += chars[i++]
-      logEl.scrollTop = logEl.scrollHeight
+      line.textContent += chars[i++]; logEl.scrollTop = logEl.scrollHeight
       setTimeout(next, 18)
     }
     next()
@@ -323,16 +273,14 @@ function typeText(logEl, text) {
 function enqueueLogs(entries) {
   entries.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
   entries.forEach(e => { if (!e.type) e.type = "normal" })
-  logQueue.push(...entries)
-  processLogQueue()
+  logQueue.push(...entries); processLogQueue()
 }
 
 async function processLogQueue() {
   if (isProcessing) return
   if (logQueue.length === 0) {
     if (pendingRoomData) {
-      const data = pendingRoomData
-      pendingRoomData = null
+      const data = pendingRoomData; pendingRoomData = null
       setTimeout(async () => {
         if (data.dice_event && data.dice_event.ts > lastDiceEventTs) {
           lastDiceEventTs = data.dice_event.ts
@@ -350,7 +298,6 @@ async function processLogQueue() {
   setTimeout(processLogQueue, 50)
 }
 
-// ── 애니메이션 ───────────────────────────────────────────────────────
 function animateHpBar(prefix, targetHp, maxHp, showNum) {
   return new Promise(resolve => {
     const bar = $(`${prefix}-hp-bar`)
@@ -385,41 +332,28 @@ function triggerAttackEffect(defPrefix) {
 
 function triggerBlink(prefix) {
   return new Promise(resolve => {
-    const area = $(`${prefix}-pokemon-area`)
-    if (!area) { resolve(); return }
-    const targets = [
-      area.querySelector(".portrait-wrap"),
-      area.querySelector(".hp-card")
-    ].filter(Boolean)
+    const area = $(`${prefix}-pokemon-area`); if (!area) { resolve(); return }
+    const targets = [area.querySelector(".portrait-wrap"), area.querySelector(".hp-card")].filter(Boolean)
     if (targets.length === 0) { resolve(); return }
     let done = 0
     targets.forEach(el => {
-      el.classList.remove("blink-damage"); void el.offsetWidth
-      el.classList.add("blink-damage")
-      el.addEventListener("animationend", () => {
-        el.classList.remove("blink-damage")
-        if (++done >= targets.length) resolve()
-      }, { once: true })
+      el.classList.remove("blink-damage"); void el.offsetWidth; el.classList.add("blink-damage")
+      el.addEventListener("animationend", () => { el.classList.remove("blink-damage"); if (++done >= targets.length) resolve() }, { once: true })
     })
   })
 }
 
 function animateAttackDice(slot, finalRoll) {
   return new Promise(resolve => {
-    const wrap   = $("dice-wrap")
-    const diceEl = $(`dice-${slot}`)
+    const wrap = $("dice-wrap"), diceEl = $(`dice-${slot}`)
     if (!wrap || !diceEl) { resolve(); return }
-    ;["p1","p2","p3","boss"].forEach(s => {
-      const box = $(`dice-box-${s}`)
-      if (box) box.style.display = s === slot ? "block" : "none"
-    })
+    ;["p1","p2","p3","boss"].forEach(s => { const box = $(`dice-box-${s}`); if (box) box.style.display = s === slot ? "block" : "none" })
     wrap.style.display = "flex"
     let count = 0
     const iv = setInterval(() => {
       diceEl.innerText = rollD10()
       if (++count >= 16) {
-        clearInterval(iv)
-        diceEl.innerText = finalRoll
+        clearInterval(iv); diceEl.innerText = finalRoll
         diceEl.classList.remove("pop"); void diceEl.offsetWidth; diceEl.classList.add("pop")
         playSound(SFX_DICE)
         setTimeout(() => { wrap.style.display = "none"; resolve() }, 900)
@@ -430,25 +364,15 @@ function animateAttackDice(slot, finalRoll) {
 
 function animateRoundDice(rolls, slots) {
   return new Promise(resolve => {
-    const wrap = $("dice-wrap")
-    if (!wrap) { resolve(); return }
-    ;["p1","p2","p3","boss"].forEach(s => {
-      const box = $(`dice-box-${s}`)
-      if (box) box.style.display = slots.includes(s) ? "block" : "none"
-    })
+    const wrap = $("dice-wrap"); if (!wrap) { resolve(); return }
+    ;["p1","p2","p3","boss"].forEach(s => { const box = $(`dice-box-${s}`); if (box) box.style.display = slots.includes(s) ? "block" : "none" })
     wrap.style.display = "flex"
     let count = 0
     const iv = setInterval(() => {
-      slots.forEach(s => {
-        const el = $(`dice-${s}`)
-        if (el) el.innerText = rollD10()
-      })
+      slots.forEach(s => { const el = $(`dice-${s}`); if (el) el.innerText = rollD10() })
       if (++count >= 20) {
         clearInterval(iv)
-        slots.forEach(s => {
-          const el = $(`dice-${s}`)
-          if (el) { el.innerText = rolls[s]; el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop") }
-        })
+        slots.forEach(s => { const el = $(`dice-${s}`); if (el) { el.innerText = rolls[s]; el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop") } })
         playSound(SFX_DICE)
         setTimeout(() => { wrap.style.display = "none"; resolve() }, 1600)
       }
@@ -458,8 +382,7 @@ function animateRoundDice(rolls, slots) {
 
 function showAssistAnimation() {
   return new Promise(resolve => {
-    const el = $("assist-anim")
-    if (!el) { resolve(); return }
+    const el = $("assist-anim"); if (!el) { resolve(); return }
     el.classList.remove("assist-show"); void el.offsetWidth; el.classList.add("assist-show")
     setTimeout(resolve, 800)
   })
@@ -467,24 +390,17 @@ function showAssistAnimation() {
 
 function showSyncAnimation() {
   return new Promise(resolve => {
-    const el = $("sync-anim")
-    if (!el) { resolve(); return }
+    const el = $("sync-anim"); if (!el) { resolve(); return }
     el.classList.remove("sync-show"); void el.offsetWidth; el.classList.add("sync-show")
     setTimeout(resolve, 800)
   })
 }
 
-// ── 블래키 Override! 애니메이션 ──────────────────────────────────────
 function showUmbreonAnimation() {
   return new Promise(resolve => {
-    const el      = $("umbreon-anim")
-    const wrapper = $("battle-wrapper")
+    const el = $("umbreon-anim"), wrapper = $("battle-wrapper")
     if (!el) { resolve(); return }
-
-    // 효과음
     playSound(SFX_DICE)
-
-    // 화면 강하게 3번 흔들기
     if (wrapper) {
       let shakeCount = 0
       const doShake = () => {
@@ -492,14 +408,11 @@ function showUmbreonAnimation() {
         wrapper.classList.add("screen-shake-heavy")
         wrapper.addEventListener("animationend", () => {
           wrapper.classList.remove("screen-shake-heavy")
-          shakeCount++
-          if (shakeCount < 3) setTimeout(doShake, 50)
+          if (++shakeCount < 3) setTimeout(doShake, 50)
         }, { once: true })
       }
       doShake()
     }
-
-    // Override! 텍스트 애니메이션
     el.classList.remove("umbreon-show"); void el.offsetWidth; el.classList.add("umbreon-show")
     setTimeout(resolve, 1400)
   })
@@ -512,19 +425,16 @@ function updateMoveButtons(data) {
   const fainted     = !myPokemon || myPokemon.hp <= 0
   const movesArr    = myPokemon?.moves ?? []
   const chainBound  = myPokemon?.chainBound ?? null
+  const isAutoTurn  = !!(myPokemon?.flyState?.flying || myPokemon?.digState?.digging ||
+    myPokemon?.ghostDiveState?.diving || myPokemon?.bideState ||
+    myPokemon?.rollState?.active || myPokemon?.hyperBeamState)
 
-  const isAutoTurn = !!(
-    myPokemon?.flyState?.flying       ||
-    myPokemon?.digState?.digging      ||
-    myPokemon?.ghostDiveState?.diving ||
-    myPokemon?.bideState              ||
-    myPokemon?.rollState?.active      ||
-    myPokemon?.hyperBeamState
-  )
+  // 아군 타겟 팝업 닫기
+  const allyPopup = $("ally-target-popup")
+  if (allyPopup) allyPopup.style.display = "none"
 
   for (let i = 0; i < 4; i++) {
-    const btn = $(`move-btn-${i}`)
-    if (!btn) continue
+    const btn = $(`move-btn-${i}`); if (!btn) continue
     if (i >= movesArr.length) {
       btn.innerHTML = '<span style="font-size:13px">-</span>'
       btn.disabled = true; btn.onclick = null; continue
@@ -532,30 +442,24 @@ function updateMoveButtons(data) {
     const mv       = movesArr[i]
     const moveInfo = moves[mv.name] ?? {}
     const acc      = moveInfo.alwaysHit ? "필중" : `${moveInfo.accuracy ?? 100}%`
-
     const isChainBlocked = !!(chainBound && chainBound.moveName === mv.name)
     if (isChainBlocked) {
       btn.innerHTML = `<span style="display:block;font-size:13px;font-weight:bold">${mv.name} 🔗</span><span style="display:block;font-size:10px;opacity:.85">사슬묶기 중!</span>`
       btn.style.background = "#555"; btn.disabled = true; btn.onclick = null; continue
     }
-
     if (isAutoTurn) {
       btn.innerHTML = `<span style="display:block;font-size:13px;font-weight:bold">${mv.name}</span><span style="display:block;font-size:10px;opacity:.85">자동처리 중...</span>`
-      const color = TYPE_COLORS[moveInfo.type] ?? "#a0a0a0"
-      btn.style.background = color; btn.disabled = true; btn.onclick = null; continue
+      btn.style.background = TYPE_COLORS[moveInfo.type] ?? "#a0a0a0"; btn.disabled = true; btn.onclick = null; continue
     }
-
     btn.innerHTML = `<span style="display:block;font-size:13px;font-weight:bold">${mv.name}</span><span style="display:block;font-size:10px;opacity:.85">PP: ${mv.pp} | ${acc}</span>`
     const color = TYPE_COLORS[moveInfo.type] ?? "#a0a0a0"
     btn.style.background = color
     btn.style.boxShadow  = `inset 0 0 0 2px white, 0 0 0 2px ${color}`
-
-    const lockedByTorment    = !!(myPokemon?.tormented && mv.name === myPokemon?.lastUsedMove)
     const soundMoves         = ["금속음","돌림노래","바크아웃","소란피기","싫은소리","울부짖기","울음소리","차밍보이스","비밀이야기","하이퍼보이스","매혹의보이스"]
+    const lockedByTorment    = !!(myPokemon?.tormented && mv.name === myPokemon?.lastUsedMove)
     const lockedByThroatChop = !!((myPokemon?.throatChopped ?? 0) > 0 && soundMoves.includes(mv.name))
     const lockedByOutrage    = !!(myPokemon?.outrageState?.active)
     const lockedByTaunt      = !!((myPokemon?.taunted ?? 0) > 0 && !(moveInfo?.power > 0))
-
     const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone
       && !isChainBlocked && !lockedByTorment && !lockedByThroatChop && !lockedByOutrage && !lockedByTaunt
     btn.disabled = !canUse
@@ -563,37 +467,71 @@ function updateMoveButtons(data) {
   }
 }
 
-let pendingMoveIdx = -1
+// ── 아군 타겟 팝업 ───────────────────────────────────────────────────
+function showAllyTargetPopup(moveIdx, moveInfo, data) {
+  const popup   = $("ally-target-popup")
+  const btnWrap = $("ally-target-buttons")
+  const cancel  = $("ally-target-cancel")
+  if (!popup || !btnWrap) { doUseMove(moveIdx, [], data); return }
+
+  btnWrap.innerHTML = ""
+
+  const allies = otherPlayerSlots().filter(s => {
+    const idx  = data[`${s}_active_idx`] ?? 0
+    const pkmn = data[`${s}_entry`]?.[idx]
+    return pkmn && pkmn.hp > 0
+  })
+
+  if (allies.length === 0) { doUseMove(moveIdx, [], data); return }
+
+  allies.forEach(s => {
+    const idx        = data[`${s}_active_idx`] ?? 0
+    const pkmn       = data[`${s}_entry`]?.[idx]
+    const slotKey    = s.replace("p", "player")
+    const playerName = (data[`${slotKey}_name`] ?? s).split("]").pop().trim()
+    const hpPct      = Math.round(pkmn.hp / (pkmn.maxHp ?? pkmn.hp) * 100)
+    const btn        = document.createElement("button")
+    btn.style.cssText = "padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid #27ae60;background:transparent;color:#27ae60;cursor:pointer;"
+    btn.innerText = `${playerName} · ${pkmn.name} (${hpPct}%)`
+    btn.onclick = () => {
+      playSound(SFX_BTN)
+      popup.style.display = "none"
+      doUseMove(moveIdx, [s], data)
+    }
+    btnWrap.appendChild(btn)
+  })
+
+  if (cancel) cancel.onclick = () => { popup.style.display = "none" }
+  popup.style.display = "block"
+}
 
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
-
   if (moveInfo?.outrage) { doUseMove(idx, ["boss"], data); return }
   if (moveInfo?.aoe || moveInfo?.aoeEnemy) { doUseMove(idx, ["boss"], data); return }
+  if (moveInfo?.waterHeal) { doUseMove(idx, [], data); return }
 
   const r = moveInfo?.rank
+  const needsAllyTarget = moveInfo?.healPulse || moveInfo?.pollenPuff
+    || (r && r.targetAtk !== undefined && r.targetAtk > 0 && !moveInfo?.power)
+  if (needsAllyTarget) { showAllyTargetPopup(idx, moveInfo, data); return }
+
   const targetsEnemy =
     moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
     || moveInfo?.taunt || moveInfo?.memento
     || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
     || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
-    || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
-    || moveInfo?.pollenPuff || moveInfo?.curse
+    || moveInfo?.dragonTail || moveInfo?.poisonPowder || moveInfo?.curse
     || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
     || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
 
-  if (targetsEnemy) {
-    doUseMove(idx, ["boss"], data)
-  } else {
-    doUseMove(idx, [], data)
-  }
+  doUseMove(idx, targetsEnemy ? ["boss"] : [], data)
 }
 
 async function doUseMove(moveIdx, targetSlots, data) {
   if (actionDone) return
   clearTurnTimer()
-  actionDone = true
-  updateMoveButtons(data)
+  actionDone = true; updateMoveButtons(data)
   try {
     await _useMove({ roomId: ROOM_ID, mySlot, moveIdx, targetSlots })
   } catch (e) {
@@ -602,12 +540,9 @@ async function doUseMove(moveIdx, targetSlots, data) {
   }
 }
 
-// ── 교체 버튼 ────────────────────────────────────────────────────────
 function updateBenchButtons(data) {
-  const bench = $("bench-container")
-  if (!bench) return
+  const bench = $("bench-container"); if (!bench) return
   bench.innerHTML = ""
-
   const myEntry      = data[`${mySlot}_entry`] ?? []
   const activeIdx    = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = myEntry[activeIdx]
@@ -616,7 +551,6 @@ function updateBenchButtons(data) {
   const isDiving     = !!(myActivePkmn?.ghostDiveState?.diving)
   const isFlying     = !!(myActivePkmn?.flyState?.flying)
   const isDigging    = !!(myActivePkmn?.digState?.digging)
-
   myEntry.forEach((pkmn, idx) => {
     if (idx === activeIdx) return
     const btn = document.createElement("button")
@@ -628,8 +562,7 @@ function updateBenchButtons(data) {
       if (isSpectator) {
         btn.disabled = true
       } else {
-        const canSwitch = (isFainted || forceSwitch || (myTurn && !actionDone))
-          && !isDiving && !isFlying && !isDigging
+        const canSwitch = (isFainted || forceSwitch || (myTurn && !actionDone)) && !isDiving && !isFlying && !isDigging
         btn.disabled = !canSwitch
         if (canSwitch) btn.onclick = () => { playSound(SFX_BTN); doSwitchPokemon(idx, data, forceSwitch) }
       }
@@ -657,176 +590,116 @@ async function doSwitchPokemon(newIdx, data, forceSwitch = false) {
   }
 }
 
-// ── 턴 순서 표시 ─────────────────────────────────────────────────────
 function updateOrderDisplay(data) {
-  const el = $("order-display")
-  if (!el) return
+  const el = $("order-display"); if (!el) return
   const order = data.current_order ?? []
   if (order.length === 0) { el.innerHTML = ""; return }
   el.innerHTML = order.map((slot, i) => {
-    const label   = slot === "boss" ? (data.boss_name ?? "보스") :
-                    (data[`${slot.replace("p","player")}_name`] ?? slot).split("]").pop().trim()
+    const label    = slot === "boss" ? (data.boss_name ?? "보스") : (data[`${slot.replace("p","player")}_name`] ?? slot).split("]").pop().trim()
     const isActive = i === 0
     const isMine   = slot === mySlot
     let cls = "order-item"
-    if (isActive) cls += " active"
-    else if (isMine) cls += " mine"
+    if (isActive) cls += " active"; else if (isMine) cls += " mine"
     return `<div class="${cls}">${i+1}. ${label}</div>`
   }).join("")
 }
 
 function updateTurnUI(data) {
-  const el = $("turn-display")
-  if (!el) return
+  const el = $("turn-display"); if (!el) return
   const order = data.current_order ?? []
   if (isSpectator) {
     if (order.length > 0) {
-      const s     = order[0]
-      const label = s === "boss" ? (data.boss_name ?? "보스") :
-                    (data[`${s.replace("p","player")}_name`] ?? s).split("]").pop().trim()
+      const s = order[0]
+      const label = s === "boss" ? (data.boss_name ?? "보스") : (data[`${s.replace("p","player")}_name`] ?? s).split("]").pop().trim()
       el.innerText = `${label}의 턴`; el.style.color = "#333"
-    } else {
-      el.innerText = "라운드 대기 중..."; el.style.color = "#aaa"
-    }
+    } else { el.innerText = "라운드 대기 중..."; el.style.color = "#aaa" }
     return
   }
   const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
   const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
   const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
-  if (isFainted) {
-    el.innerText = "교체할 포켓몬을 선택!"; el.style.color = "#e67e22"
-  } else if (order.length === 0) {
-    el.innerText = "라운드 대기 중..."; el.style.color = "#aaa"
-  } else if (order[0] === mySlot) {
-    el.innerText = "내 턴!"; el.style.color = "green"
-  } else if (order[0] === "boss") {
-    el.innerText = "보스 턴..."; el.style.color = "#e74c3c"
-  } else {
-    const idx    = order.indexOf(mySlot)
+  if (isFainted) { el.innerText = "교체할 포켓몬을 선택!"; el.style.color = "#e67e22" }
+  else if (order.length === 0) { el.innerText = "라운드 대기 중..."; el.style.color = "#aaa" }
+  else if (order[0] === mySlot) { el.innerText = "내 턴!"; el.style.color = "green" }
+  else if (order[0] === "boss") { el.innerText = "보스 턴..."; el.style.color = "#e74c3c" }
+  else {
+    const idx = order.indexOf(mySlot)
     el.innerText = idx > 0 ? `${idx}번째 대기중...` : "다른 플레이어 턴..."
     el.style.color = "gray"
   }
-  const tc = $("turn-count")
-  if (tc) tc.innerText = `${data.round_count ?? 0}라운드 / ${data.turn_count ?? 0}턴`
+  const tc = $("turn-count"); if (tc) tc.innerText = `${data.round_count ?? 0}라운드 / ${data.turn_count ?? 0}턴`
 }
 
-// ── 어시스트 UI ──────────────────────────────────────────────────────
 function updateAssistUI(data) {
-  const assist  = data.assist_active  ?? null
-  const used    = data.assist_used    ?? false
-  const req     = data.assist_request ?? null
-  const blocked = cannotRequestSupport(data)
-  const allDead = isAllPlayersDead(data)
-
+  const assist = data.assist_active ?? null, used = data.assist_used ?? false
+  const req = data.assist_request ?? null, blocked = cannotRequestSupport(data), allDead = isAllPlayersDead(data)
   const reqBtn = $("assist-request-btn")
   if (reqBtn) {
-    const isMyReq     = req?.from === mySlot
-    const alreadyAgreed = req?.agrees?.includes(mySlot)
+    const isMyReq = req?.from === mySlot
     if (isSpectator || used || assist || allDead || blocked) {
-      reqBtn.disabled  = true
+      reqBtn.disabled = true
       reqBtn.innerText = allDead ? "사용 불가" : assist ? "🤝 어시스트 중" : used ? "지원 완료" : "요청 불가"
     } else if (isMyReq) {
-      reqBtn.disabled  = true
-      const agreeCnt   = req.agrees?.length ?? 0
-      reqBtn.innerText = `요청 중... (${agreeCnt}/2 동의)`
+      reqBtn.disabled = true; reqBtn.innerText = `요청 중... (${req.agrees?.length ?? 0}/2 동의)`
     } else {
-      reqBtn.disabled  = false
-      reqBtn.innerText = "지원 요청"
-      reqBtn.onclick   = () => { playSound(SFX_BTN); doRequestAssist() }
+      reqBtn.disabled = false; reqBtn.innerText = "지원 요청"
+      reqBtn.onclick = () => { playSound(SFX_BTN); doRequestAssist() }
     }
   }
-
   const popup = $("assist-popup")
   if (popup) {
-    const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
+    const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
     const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-    const myFainted    = !myActivePkmn || myActivePkmn.hp <= 0
-    const canAgree     = req && req.from !== mySlot
-                      && !(req.agrees ?? []).includes(mySlot)
-                      && !isSpectator && !myFainted
+    const canAgree = req && req.from !== mySlot && !(req.agrees ?? []).includes(mySlot) && !isSpectator && myActivePkmn?.hp > 0
     if (canAgree) {
       popup.style.display = "block"
-      const nameEl = $("assist-popup-name")
-      if (nameEl) nameEl.innerText = req.fromName ?? req.from
-      const agreeCnt = req.agrees?.length ?? 0
-      const cntEl = $("assist-agree-count")
-      if (cntEl) cntEl.innerText = `(${agreeCnt}/2 동의)`
-    } else {
-      popup.style.display = "none"
-    }
+      const nameEl = $("assist-popup-name"); if (nameEl) nameEl.innerText = req.fromName ?? req.from
+      const cntEl  = $("assist-agree-count"); if (cntEl) cntEl.innerText = `(${req.agrees?.length ?? 0}/2 동의)`
+    } else { popup.style.display = "none" }
   }
 }
 
-// ── 싱크로나이즈 UI ──────────────────────────────────────────────────
 function updateSyncUI(data) {
-  const sync    = data.sync_active  ?? null
-  const used    = data.sync_used    ?? false
-  const req     = data.sync_request ?? null
-  const blocked = cannotRequestSupport(data)
-  const allDead = isAllPlayersDead(data)
-
+  const sync = data.sync_active ?? null, used = data.sync_used ?? false
+  const req = data.sync_request ?? null, blocked = cannotRequestSupport(data), allDead = isAllPlayersDead(data)
   const reqBtn = $("sync-request-btn")
   if (reqBtn) {
     const isMyReq = req?.from === mySlot
     if (isSpectator || used || sync || allDead || blocked) {
-      reqBtn.disabled  = true
+      reqBtn.disabled = true
       reqBtn.innerText = allDead ? "사용 불가" : sync ? "💠 싱크로 중" : used ? "동기화 완료" : "요청 불가"
     } else if (isMyReq) {
-      reqBtn.disabled  = true
-      const agreeCnt   = req.agrees?.length ?? 0
-      reqBtn.innerText = `요청 중... (${agreeCnt}/2 동의)`
+      reqBtn.disabled = true; reqBtn.innerText = `요청 중... (${req.agrees?.length ?? 0}/2 동의)`
     } else {
-      reqBtn.disabled  = false
-      reqBtn.innerText = "동기화 요청"
-      reqBtn.onclick   = () => { playSound(SFX_BTN); doRequestSync() }
+      reqBtn.disabled = false; reqBtn.innerText = "동기화 요청"
+      reqBtn.onclick = () => { playSound(SFX_BTN); doRequestSync() }
     }
   }
-
   const statusEl = $("sync-status")
   if (statusEl) {
-    if (sync) {
-      const readyCnt = sync.ready?.length ?? 0
-      statusEl.innerText = `💠 싱크로 진행 중 (${readyCnt}/3 준비)`
-      statusEl.style.color = "#9b59b6"
-    } else {
-      statusEl.innerText = ""
-    }
+    if (sync) { statusEl.innerText = `💠 싱크로 진행 중 (${sync.ready?.length ?? 0}/3 준비)`; statusEl.style.color = "#9b59b6" }
+    else statusEl.innerText = ""
   }
-
   const popup = $("sync-popup")
   if (popup) {
-    const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
+    const myActiveIdx = data[`${mySlot}_active_idx`] ?? 0
     const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-    const myFainted    = !myActivePkmn || myActivePkmn.hp <= 0
-    const canAgree     = req && req.from !== mySlot
-                      && !(req.agrees ?? []).includes(mySlot)
-                      && !isSpectator && !myFainted
+    const canAgree = req && req.from !== mySlot && !(req.agrees ?? []).includes(mySlot) && !isSpectator && myActivePkmn?.hp > 0
     if (canAgree) {
       popup.style.display = "block"
-      const nameEl = $("sync-popup-name")
-      if (nameEl) nameEl.innerText = req.fromName ?? req.from
-    } else {
-      popup.style.display = "none"
-    }
+      const nameEl = $("sync-popup-name"); if (nameEl) nameEl.innerText = req.fromName ?? req.from
+    } else { popup.style.display = "none" }
   }
 }
 
-// ── 게임 오버 ────────────────────────────────────────────────────────
 function showGameOver(data) {
-  if (gameOver) return
-  gameOver = true
-  clearTurnTimer()
+  if (gameOver) return; gameOver = true; clearTurnTimer()
   const win = data.raid_result === "victory"
   const td  = $("turn-display")
-  if (isSpectator) {
-    if (td) { td.innerText = win ? "🏆 레이드 성공!" : "💀 레이드 실패..."; td.style.color = win ? "gold" : "red" }
-  } else {
-    if (td) { td.innerText = win ? "🏆 승리!" : "💀 패배..."; td.style.color = win ? "gold" : "red" }
-  }
+  if (td) { td.innerText = win ? (isSpectator ? "🏆 레이드 성공!" : "🏆 승리!") : (isSpectator ? "💀 레이드 실패..." : "💀 패배..."); td.style.color = win ? "gold" : "red" }
   for (let i = 0; i < 4; i++) { const b = $(`move-btn-${i}`); if (b) { b.disabled = true; b.onclick = null } }
   const bench = $("bench-container"); if (bench) bench.innerHTML = ""
-  const lb = $("leaveBtn")
-  if (lb) { lb.style.display = "inline-block"; lb.disabled = false; lb.onclick = leaveGame }
+  const lb = $("leaveBtn"); if (lb) { lb.style.display = "inline-block"; lb.disabled = false; lb.onclick = leaveGame }
 }
 
 async function doSkipTurn(timerExpired = false) {
@@ -834,7 +707,6 @@ async function doSkipTurn(timerExpired = false) {
   catch (e) { console.warn("skipTurn 오류:", e.message); actionDone = false }
 }
 
-// ── applyRoomData ────────────────────────────────────────────────────
 function applyRoomData(data) {
   PLAYER_SLOTS.forEach(s => updateSlotUI(s, data))
   updateBossUI(data)
@@ -847,14 +719,10 @@ function applyRoomData(data) {
     updateSyncUI(data)
   }
   const spectEl = $("spectator-list")
-  if (spectEl) {
-    const names = data.spectator_names ?? []
-    spectEl.innerText = names.length > 0 ? "관전: " + names.join(", ") : ""
-  }
+  if (spectEl) { const names = data.spectator_names ?? []; spectEl.innerText = names.length > 0 ? "관전: " + names.join(", ") : "" }
   if (data.game_over) { showGameOver(data); return }
 }
 
-// ── 로그 리스너 ──────────────────────────────────────────────────────
 function listenLogs(gameStartedAt) {
   let firstSnapshot = true
   const q = query(logsRef, orderBy("ts"))
@@ -875,19 +743,15 @@ function listenLogs(gameStartedAt) {
 
 let lastDiceEventTs = 0
 
-// ── 룸 리스너 ────────────────────────────────────────────────────────
 function listenRoom() {
   onSnapshot(roomRef, async snap => {
     const data = snap.data()
     if (!data || !data.p1_entry) return
-
     const order           = data.current_order ?? []
     const currentTurnSlot = order[0] ?? null
 
-    // 타이머
     if (currentTurnSlot !== lastTurnSlot) {
-      lastTurnSlot = currentTurnSlot
-      clearTurnTimer()
+      lastTurnSlot = currentTurnSlot; clearTurnTimer()
       if (currentTurnSlot && !data.game_over) {
         const turnStartedAt = data.turn_started_at ?? Date.now()
         if (isSpectator || currentTurnSlot === "boss") {
@@ -895,69 +759,41 @@ function listenRoom() {
           timerSecondsLeft = calcRemaining()
           const el = $("turn-timer"); if (el) el.style.display = "inline"
           updateTimerDisplay()
-          timerTickInterval = setInterval(() => {
-            timerSecondsLeft = calcRemaining()
-            updateTimerDisplay()
-            if (timerSecondsLeft <= 0) clearTurnTimer()
-          }, 1000)
+          timerTickInterval = setInterval(() => { timerSecondsLeft = calcRemaining(); updateTimerDisplay(); if (timerSecondsLeft <= 0) clearTurnTimer() }, 1000)
         }
       }
     }
 
     if (!isSpectator && !data.game_over) {
-      const wasMyTurn   = myTurn
-      const isMyTurnNow = order[0] === mySlot
+      const wasMyTurn = myTurn, isMyTurnNow = order[0] === mySlot
       myTurn = isMyTurnNow
-
       if (!wasMyTurn && isMyTurnNow) {
         actionDone = false
         const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
         const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-        const isAutoTurnNow = !!(
-          myActivePkmn?.bideState             ||
-          myActivePkmn?.rollState?.active      ||
-          myActivePkmn?.flyState?.flying       ||
-          myActivePkmn?.digState?.digging      ||
-          myActivePkmn?.ghostDiveState?.diving ||
-          myActivePkmn?.hyperBeamState
-        )
-        if (!isAutoTurnNow) {
-          const turnStartedAt = data.turn_started_at ?? Date.now()
-          startTurnTimer(turnStartedAt, data)
-        }
+        const isAutoTurnNow = !!(myActivePkmn?.bideState || myActivePkmn?.rollState?.active ||
+          myActivePkmn?.flyState?.flying || myActivePkmn?.digState?.digging ||
+          myActivePkmn?.ghostDiveState?.diving || myActivePkmn?.hyperBeamState)
+        if (!isAutoTurnNow) startTurnTimer(data.turn_started_at ?? Date.now(), data)
       }
-
-      if (!isMyTurnNow && currentTurnSlot && currentTurnSlot !== "boss" && !data.game_over) {
-        if (!timerTickInterval) {
-          clearTurnTimer()
-          const turnStartedAt = data.turn_started_at ?? Date.now()
-          const calcRemaining = () => Math.max(0, TIMER_SECONDS - Math.floor((Date.now() - turnStartedAt) / 1000))
-          timerSecondsLeft = calcRemaining()
-          const el = $("turn-timer"); if (el) el.style.display = "inline"
-          updateTimerDisplay()
-          timerTickInterval = setInterval(() => {
-            timerSecondsLeft = calcRemaining()
-            updateTimerDisplay()
-            if (timerSecondsLeft <= 0) clearTurnTimer()
-          }, 1000)
-        }
+      if (!isMyTurnNow && currentTurnSlot && currentTurnSlot !== "boss" && !data.game_over && !timerTickInterval) {
+        clearTurnTimer()
+        const turnStartedAt = data.turn_started_at ?? Date.now()
+        const calcRemaining = () => Math.max(0, TIMER_SECONDS - Math.floor((Date.now() - turnStartedAt) / 1000))
+        timerSecondsLeft = calcRemaining()
+        const el = $("turn-timer"); if (el) el.style.display = "inline"
+        updateTimerDisplay()
+        timerTickInterval = setInterval(() => { timerSecondsLeft = calcRemaining(); updateTimerDisplay(); if (timerSecondsLeft <= 0) clearTurnTimer() }, 1000)
       }
-
       if (myTurn && !actionDone) {
         const myEntry = data[`${mySlot}_entry`] ?? []
-        if (myEntry.every(p => p.hp <= 0)) {
-          actionDone = true; doSkipTurn(false)
-        } else {
+        if (myEntry.every(p => p.hp <= 0)) { actionDone = true; doSkipTurn(false) }
+        else {
           const myActiveIdx  = data[`${mySlot}_active_idx`] ?? 0
           const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
-
-          if (data[`force_switch_${mySlot}`] && myActivePkmn && myActivePkmn.hp > 0) {
-            actionDone = false; applyRoomData(data); return
-          }
-
+          if (data[`force_switch_${mySlot}`] && myActivePkmn && myActivePkmn.hp > 0) { actionDone = false; applyRoomData(data); return }
           if (myActivePkmn?.outrageState?.active) {
-            const outrageMoveIdx = (myActivePkmn.moves ?? [])
-              .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
+            const outrageMoveIdx = (myActivePkmn.moves ?? []).findIndex(m => m.name === myActivePkmn.outrageState.moveName)
             if (outrageMoveIdx !== -1) {
               actionDone = true
               _useMove({ roomId: ROOM_ID, mySlot, moveIdx: outrageMoveIdx, targetSlots: ["boss"] })
@@ -965,22 +801,17 @@ function listenRoom() {
               return
             }
           }
-
-          const needsAutoMove = myActivePkmn?.bideState || myActivePkmn?.rollState?.active
-          const needsAutoFly  = myActivePkmn?.flyState?.flying
-          const needsAutoDig  = myActivePkmn?.digState?.digging
-          const needsAutoDive = myActivePkmn?.ghostDiveState?.diving
-          if (!actionDone && (needsAutoMove || needsAutoFly || needsAutoDig || needsAutoDive || myActivePkmn?.hyperBeamState)) {
+          const needsAuto = myActivePkmn?.bideState || myActivePkmn?.rollState?.active ||
+            myActivePkmn?.flyState?.flying || myActivePkmn?.digState?.digging ||
+            myActivePkmn?.ghostDiveState?.diving || myActivePkmn?.hyperBeamState
+          if (!actionDone && needsAuto) {
             actionDone = true
             _useMove({ roomId: ROOM_ID, mySlot, moveIdx: 0, targetSlots: ["boss"] })
               .catch(e => { console.warn("자동처리 오류:", e.message); actionDone = false })
           }
         }
       }
-
-      if (order.length === 0 && data.game_started && data.intro_done) {
-        tryStartRound()
-      }
+      if (order.length === 0 && data.game_started && data.intro_done) tryStartRound()
     }
 
     // 기절 시 즉시 교체 버튼 활성화
@@ -989,10 +820,7 @@ function listenRoom() {
       const myActivePkmn = data[`${mySlot}_entry`]?.[myActiveIdx]
       const isFainted    = !myActivePkmn || myActivePkmn.hp <= 0
       const hasAlive     = (data[`${mySlot}_entry`] ?? []).some(p => p.hp > 0)
-      if (isFainted && hasAlive) {
-        updateBenchButtons(data)
-        updateTurnUI(data)
-      }
+      if (isFainted && hasAlive) { updateBenchButtons(data); updateTurnUI(data) }
     }
 
     if (data.dice_event && data.dice_event.ts > lastDiceEventTs) {
@@ -1000,92 +828,50 @@ function listenRoom() {
         lastDiceEventTs = data.dice_event.ts
         await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
         applyRoomData(data)
-      } else {
-        pendingRoomData = data
-      }
+      } else { pendingRoomData = data }
       return
     }
-
-    if (!isProcessing && logQueue.length === 0) {
-      applyRoomData(data)
-    } else {
-      pendingRoomData = data
-    }
+    if (!isProcessing && logQueue.length === 0) { applyRoomData(data) } else { pendingRoomData = data }
   })
 }
 
 let startRoundLock = false
 async function tryStartRound() {
-  if (startRoundLock) return
-  startRoundLock = true
+  if (startRoundLock) return; startRoundLock = true
   try { await _startRound({ roomId: ROOM_ID, mySlot }) }
   catch (e) { console.warn("startRound:", e.message) }
   finally { setTimeout(() => startRoundLock = false, 3000) }
 }
 
-// ── 어시스트 / 싱크로 API ────────────────────────────────────────────
 async function doRequestAssist() {
   if (!myTurn) { alert("자신의 턴에만 지원 요청할 수 있어!"); return }
-  try { await _requestAssist({ roomId: ROOM_ID, mySlot }) }
-  catch (e) { alert(`어시스트 요청 실패: ${e.message}`) }
+  try { await _requestAssist({ roomId: ROOM_ID, mySlot }) } catch (e) { alert(`어시스트 요청 실패: ${e.message}`) }
 }
-async function doAgreeAssist() {
-  playSound(SFX_BTN)
-  try { await _agreeAssist({ roomId: ROOM_ID, mySlot }) }
-  catch (e) { alert(`동의 실패: ${e.message}`) }
-}
-async function doRejectAssist() {
-  playSound(SFX_BTN)
-  try { await _rejectAssist({ roomId: ROOM_ID, mySlot }) }
-  catch (e) { console.warn("거절 실패:", e.message) }
-}
-
+async function doAgreeAssist() { playSound(SFX_BTN); try { await _agreeAssist({ roomId: ROOM_ID, mySlot }) } catch (e) { alert(`동의 실패: ${e.message}`) } }
+async function doRejectAssist() { playSound(SFX_BTN); try { await _rejectAssist({ roomId: ROOM_ID, mySlot }) } catch (e) { console.warn("거절 실패:", e.message) } }
 async function doRequestSync() {
   if (!myTurn) { alert("자신의 턴에만 동기화 요청할 수 있어!"); return }
-  try { await _requestSync({ roomId: ROOM_ID, mySlot }) }
-  catch (e) { alert(`동기화 요청 실패: ${e.message}`) }
+  try { await _requestSync({ roomId: ROOM_ID, mySlot }) } catch (e) { alert(`동기화 요청 실패: ${e.message}`) }
 }
-async function doAgreeSync() {
-  playSound(SFX_BTN)
-  try { await _agreeSync({ roomId: ROOM_ID, mySlot }) }
-  catch (e) { alert(`동의 실패: ${e.message}`) }
-}
-async function doRejectSync() {
-  playSound(SFX_BTN)
-  try { await _rejectSync({ roomId: ROOM_ID, mySlot }) }
-  catch (e) { console.warn("거절 실패:", e.message) }
-}
-
+async function doAgreeSync() { playSound(SFX_BTN); try { await _agreeSync({ roomId: ROOM_ID, mySlot }) } catch (e) { alert(`동의 실패: ${e.message}`) } }
+async function doRejectSync() { playSound(SFX_BTN); try { await _rejectSync({ roomId: ROOM_ID, mySlot }) } catch (e) { console.warn("거절 실패:", e.message) } }
 async function leaveGame() {
-  try { await _leaveGame({ roomId: ROOM_ID, myUid }) }
-  catch (e) { console.error("leaveGame 오류:", e) }
+  try { await _leaveGame({ roomId: ROOM_ID, myUid }) } catch (e) { console.error("leaveGame 오류:", e) }
   location.href = "../main.html"
 }
 
-// ── 초기화 ───────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (!user) return
   myUid = user.uid
   const roomSnap = await getDoc(roomRef)
   const data     = roomSnap.data()
-
-  PLAYER_SLOTS.forEach(s => {
-    const slotKey = s.replace("p", "player")
-    if (data?.[`${slotKey}_uid`] === myUid) mySlot = s
-  })
-
-  if (isSpectator) {
-    mySlot = null
-    const td = $("turn-display")
-    if (td) { td.innerText = "관전 중"; td.style.color = "gray" }
-  }
-
+  PLAYER_SLOTS.forEach(s => { const slotKey = s.replace("p", "player"); if (data?.[`${slotKey}_uid`] === myUid) mySlot = s })
+  if (isSpectator) { mySlot = null; const td = $("turn-display"); if (td) { td.innerText = "관전 중"; td.style.color = "gray" } }
   if (window.initRaidChat) {
     const userSnap = await getDoc(doc(db, "users", myUid))
     window.__myDisplayName = userSnap.data()?.nickname ?? myUid.slice(0, 6)
     window.initRaidChat({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt: data?.game_started_at ?? 0 })
   }
-
   if (data?.p1_entry) applyRoomData(data)
   listenLogs(data?.game_started_at ?? 0)
   listenRoom()

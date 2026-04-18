@@ -381,7 +381,7 @@ body {
   90% { transform: translate(-1px, 1px) rotate(0deg); }
   100%{ transform: translate(0,0) rotate(0deg); }
 }
-
+.fainted { opacity: 0.3; filter: grayscale(1); }
 
 /* ── 배틀 로그 ── */
 #battle-bottom { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
@@ -508,6 +508,11 @@ body {
               <button id="move-btn-3" disabled>-</button>
             </div>
             <div id="target-hint">⚔ 공격할 상대를 클릭!</div>
+            <div id="ally-target-popup" style="display:none;margin-top:4px;padding:6px 8px;border:1px dashed #27ae60;border-radius:6px;font-size:11px;color:#27ae60;">
+              💚 아군을 선택하세요
+              <div id="ally-target-buttons" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
+              <button id="ally-target-cancel" style="margin-top:4px;font-size:10px;padding:2px 8px;border:1px solid #aaa;border-radius:4px;background:transparent;cursor:pointer;color:#666;">취소</button>
+            </div>
           </div>
           <div>
             <p class="section-label">교체</p>
