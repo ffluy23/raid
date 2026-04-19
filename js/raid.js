@@ -485,15 +485,8 @@ async function processLogQueue() {
           await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
         }
 
-         if (data.assist_event?.ts && data.assist_event.ts > lastAssistEventTs) {
-          lastAssistEventTs = data.assist_event.ts
-          showAssistAnimation()
-        }
-        if (data.sync_event?.ts && data.sync_event.ts > lastSyncEventTs) {
-          lastSyncEventTs = data.sync_event.ts
-          showSyncAnimation()
-        }
         
+
         applyRoomData(data)
       }, 80)
     }
@@ -1202,14 +1195,6 @@ function listenRoom() {
 
     if (!isProcessing && logQueue.length === 0) {
 
-       if (data.assist_event?.ts && data.assist_event.ts > lastAssistEventTs) {
-        lastAssistEventTs = data.assist_event.ts
-        showAssistAnimation()
-      }
-      if (data.sync_event?.ts && data.sync_event.ts > lastSyncEventTs) {
-        lastSyncEventTs = data.sync_event.ts
-        showSyncAnimation()
-      }
 
       applyRoomData(data)
     } else {
