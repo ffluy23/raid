@@ -1,6 +1,7 @@
 // api/raidStartRound.js
 import { db } from "../lib/firestore.js"
 import { rollD10, corsHeaders } from "../lib/gameUtils.js"
+import { josa } from "../lib/effecthandler.js"
 import { executeBossAction, deepCopyEntries as deepCopyRaidEntries2 } from "../lib/raidBossAction.js"
 
 const PLAYER_SLOTS = ["p1", "p2", "p3"]
@@ -68,15 +69,15 @@ export default async function handler(req, res) {
       }
 
       // ── 기습 쿨다운 틱 ──────────────────────────────────────────
-      const ultCooldown    = data.boss_ult_cooldown ?? 0
+      const ultCooldown     = data.boss_ult_cooldown ?? 0
       const nextUltCooldown = Math.max(0, ultCooldown - 1)
 
       const roundNum = (data.round_count ?? 0) + 1
 
       tx.update(roomRef, {
-        round_count:      roundNum,
-        current_order:    order,
-        turn_started_at:  Date.now(),
+        round_count:       roundNum,
+        current_order:     order,
+        turn_started_at:   Date.now(),
         boss_ult_cooldown: nextUltCooldown,
         dice_event: { type: "all", rolls, order, slots: allSlots, ts: Date.now() }
       })
@@ -105,8 +106,8 @@ export default async function handler(req, res) {
       firstName     = bossName
       firstPkmnName = bossName
     } else {
-      const firstIdx    = data[`${firstSlot}_active_idx`] ?? 0
-      const firstPkmn   = data[`${firstSlot}_entry`]?.[firstIdx]
+      const firstIdx     = data[`${firstSlot}_active_idx`] ?? 0
+      const firstPkmn    = data[`${firstSlot}_entry`]?.[firstIdx]
       const firstSlotKey = firstSlot.replace("p", "player")
       firstName     = (data[`${firstSlotKey}_name`] ?? firstSlot).split("]").pop().trim()
       firstPkmnName = firstPkmn?.name ?? firstSlot
@@ -117,11 +118,11 @@ export default async function handler(req, res) {
     const logEntries = [
       { type: "normal", text: `── ROUND ${roundNum} ──`, ts: base },
       ...(isPhase2 && order[0] === "boss"
-        ? [{ type: "normal", text: `${bossName}이(가) 선공을 빼앗았다!`, ts: base + 1 }]
+        ? [{ type: "normal", text: `${bossName}${josa(bossName, "이가")} 선공을 빼앗았다!`, ts: base + 1 }]
         : []
       ),
-      { type: "normal", text: `순서: ${orderStr}`,                                    ts: base + 2 },
-      { type: "normal", text: `${firstPkmnName}의 선공! (${firstName})`,              ts: base + 3 },
+      { type: "normal", text: `순서: ${orderStr}`,                       ts: base + 2 },
+      { type: "normal", text: `${firstPkmnName}의 선공! (${firstName})`, ts: base + 3 },
     ]
     logEntries.forEach(entry => batch.set(logsRef.doc(), entry))
     await batch.commit()

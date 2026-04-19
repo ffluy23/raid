@@ -17,6 +17,7 @@ export function josa(word, type) {
   if (type === "을를") return hasFinal ? "을" : "를"
   if (type === "과와") return hasFinal ? "과" : "와"
   if (type === "으로") return hasFinal ? "으로" : "로"
+  if (type === "의")   return "의"
   return ""
 }
 
