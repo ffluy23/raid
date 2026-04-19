@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document</title>
+<style>
+@import url('https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css');
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0f1115;
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: #d1d5db;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.lock-card {
+  width: 300px;
+  max-width: 100%;
+  padding: 22px;
+  background: #14171d;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+  box-sizing: border-box;
+}
+
+.lock-icon {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: #9ca3af;
+}
+
+.lock-icon.unlocked {
+  color: #6b7280;
+}
+
+.title {
+  font-size: 13px;
+  color: #e5e7eb;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.hint-box {
+  font-size: 12px;
+  background: #0d0f14;
+  border: 1px solid #2a2f3a;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.input-row input {
+  flex: 1;
+  min-width: 0; /* flex 안에서 input 넘침 방지 */
+  padding: 9px;
+  background: #0d0f14;
+  border: 1px solid #2a2f3a;
+  color: #e5e7eb;
+  font-size: 16px; /* iOS 줌 방지 */
+  border-radius: 4px;
+  outline: none;
+  transition: 0.15s;
+  box-sizing: border-box;
+}
+
+.input-row input:focus {
+  background: #10131a;
+  border-color: #3b4252;
+}
+
+.input-row input.error {
+  border-color: #5a2f2f;
+  background: #1a1010;
+}
+
+.btn {
+  padding: 9px 12px;
+  background: #1c212b;
+  border: 1px solid #2f3542;
+  color: #cbd5e1;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: #232938;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.err-msg {
+  font-size: 12px;
+  margin-top: 8px;
+  color: #6b7280;
+}
+
+/* ===== 모달 ===== */
+
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.modal-bg.open {
+  display: flex;
+}
+
+.modal {
+  width: 460px;
+  max-width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: #14171d;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+  box-sizing: border-box;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  font-size: 14px;
+  font-weight: normal;
+  color: #e5e7eb;
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px; /* 모바일 탭 영역 확보 */
+}
+
+.modal-tag-row {
+  margin-top: 8px;
+}
+
+.tag {
+  font-size: 11px;
+  color: #6b7280;
+  border: 1px solid #2a2f3a;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.modal-divider {
+  height: 1px;
+  background: #2a2f3a;
+  margin: 10px 0;
+}
+
+.modal-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e5e7eb;
+}
+
+.letter-date {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.letter-sig {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+body::after {
+  content: "";
+  position: fixed; /* absolute → fixed: 스크롤해도 노이즈 유지 */
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.02),
+    rgba(255,255,255,0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+/* ── 모바일 ── */
+@media (max-width: 480px) {
+  .modal-bg {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 85vh;
+    border-radius: 12px 12px 0 0;
+    padding: 20px 16px;
+  }
+
+  .input-row input {
+    padding: 11px 9px;
+  }
+
+  .btn {
+    padding: 11px 12px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="lock-card">
+    <div class="lock-icon" id="lock-emoji"></div>
+    <div class="title">잠금 처리된 문서</div>
+    <div class="subtitle">비밀번호를 입력</div>
+    <div class="hint-box">
+      <b>힌트</b><br>
+      • 내가 두 번째로 좋아하는 포켓몬<br>
+    </div>
+    <div class="input-row">
+      <input type="text" id="pw-input" placeholder="Password" autocomplete="off" />
+      <button class="btn" onclick="checkPw()">Enter</button>
+    </div>
+    <div class="err-msg" id="err-msg"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal" onclick="onBgClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>열었네?</h2>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-tag-row">
+      <span class="tag">Sonnet</span>
+    </div>
+    <div class="modal-divider"></div>
+    <div class="modal-body">
+      <div class="letter-date">20xx년 x월 x일</div>
+      <p>안녕, 오랜만이야.</p>
+      <p>남의 컴퓨터를 함부로 열다니... 대단한데?</p>
+      <p>뭐, 여기까지 왔으면 어느정도 상황은 알고 있겠지.</p>
+      <p>너도 알다시피, 나는 지금 매우 바빠!</p>
+      <p>아 쓰기 귀찮네</p>
+      <div class="letter-sig">소넷</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const PW = "보송송";
+  const input = document.getElementById("pw-input");
+  const errMsg = document.getElementById("err-msg");
+  const lockEmoji = document.getElementById("lock-emoji");
+  const modal = document.getElementById("modal");
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") checkPw();
+  });
+
+  input.addEventListener("input", () => {
+    input.classList.remove("error");
+    errMsg.textContent = "";
+    errMsg.style.color = "";
+  });
+
+  function checkPw() {
+    const val = input.value.trim();
+    if (val === PW) {
+      lockEmoji.textContent = "";
+      lockEmoji.classList.add("unlocked");
+      errMsg.style.color = "#0f6e56";
+      errMsg.textContent = "Open";
+      setTimeout(() => {
+        modal.classList.add("open");
+      }, 280);
+    } else {
+      input.classList.add("error");
+      errMsg.style.color = "";
+      errMsg.textContent = "비밀번호 틀림";
+      input.select();
+      input.focus();
+    }
+  }
+
+  function closeModal() {
+    modal.classList.remove("open");
+  }
+
+  function onBgClick(e) {
+    if (e.target === modal) closeModal();
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModal();
+  });
+</script>
+
+</body>
+</html>

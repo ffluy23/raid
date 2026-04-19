@@ -5,91 +5,105 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-@import url('https://cdn.jsdelivr.net/gh/MonadABXY/mona-font/web/mona.css');
-*{
-  font-family: 'Mona12', sans-serif;
-}
-/* 메인 페이지 */
-.main-page {
+  @import url('https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css');
+
+body.main-page {
+  margin: 0;
   height: 100vh;
-  background: #fff;
+  background: #0f1115;
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: #d1d5db;
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 0 20px;
+  box-sizing: border-box;
 }
 
-/* 컨테이너 */
 .main-container {
-  width: 100%;
-  max-width: 420px;
-  padding: 40px 20px;
-  text-align: center;
+  width: 320px;
+  max-width: 100%;
+  padding: 24px;
+  background: #14171d;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+  position: relative;
+  box-sizing: border-box;
 }
 
-/* 타이틀 */
 .logo {
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 40px;
-  color: #111;
-  letter-spacing: -0.5px;
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 18px;
+  letter-spacing: 1px;
 }
 
-/* 메뉴 */
 .menu {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-/* 버튼 */
-.menu-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 10px;
+}
 
-  width: 100%;
-  padding: 16px;
-
-  border: 1px solid #ddd;
-  border-radius: 10px;
-
-  background: #fff;
-  color: #111;
-  font-size: 15px;
-  font-weight: 600;
-
+.menu-btn {
+  text-align: left;
+  padding: 10px;
+  background: #0d0f14;
+  border: 1px solid #2a2f3a;
+  color: #e5e7eb;
+  font-size: 13px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: 0.15s;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-/* hover */
+.menu-btn::before {
+  content: "> ";
+  color: #6b7280;
+}
+
 .menu-btn:hover {
-  background: #000;
-  color: #fff;
-  border-color: #000;
+  background: #10131a;
+  border-color: #3b4252;
 }
 
-/* active */
 .menu-btn:active {
-  transform: scale(0.98);
+  transform: translateY(1px);
 }
 
-/* 모바일 */
+.menu-btn.active {
+  background: #1a1f2b;
+  border-color: #4b5563;
+}
+
+.main-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.02),
+    rgba(255,255,255,0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* ── 모바일 ── */
 @media (max-width: 480px) {
   .main-container {
-    padding: 24px 16px;
-  }
-
-  .logo {
-    font-size: 24px;
-    margin-bottom: 30px;
+    width: 100%;
+    padding: 20px;
+    border-radius: 8px;
   }
 
   .menu-btn {
-    padding: 14px;
+    padding: 13px 10px;
     font-size: 14px;
   }
 }
@@ -102,17 +116,17 @@
 
   <div class="main-container">
 
-    <div class="logo">Double battle</div>
+    <div class="logo">Sonnet</div>
 
     <div class="menu">
-      <button class="menu-btn" onclick="location.href='pages/raidroom1.html'">
-        전룡
+      <button class="menu-btn" onclick="location.href='mail.html'">
+        메일
       </button>
-      <button class="menu-btn" onclick="location.href='pages/raidroom2.html'">
-        보송송
+      <button class="menu-btn" onclick="location.href='document.html'">
+        문서
       </button>
-      <button class="menu-btn" onclick="location.href='pages/raidroom3.html'">
-        메리프
+      <button class="menu-btn" onclick="location.href='battleroom.html'">
+        연구자료
       </button>
     </div>
 

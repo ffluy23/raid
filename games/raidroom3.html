@@ -448,8 +448,8 @@ height: 400px;
 }
 #chat-channel-label { font-size: 11px; color: #888; padding: 4px 8px; background: #f5f5f5; border-bottom: 1px solid #eee; }
 #chat-messages { flex: 1; overflow-y: auto; padding: 5px 8px; font-size: 12px; line-height: 1.5; 
-  height: 0; /* ← 이게 핵심! flex 컨테이너 안에서 스크롤 되려면 height: 0 필요 */
-  min-height: 0; /* ← Safari 대응 */
+  height: 0;
+  min-height: 0;
 }
 .chat-message { margin: 1px 0; }
 .chat-nick    { font-weight: bold; color: #555; }
@@ -496,6 +496,11 @@ height: 400px;
 </head>
 <body>
 
+<!-- ══ 애니메이션: body 직속 (position:fixed 정상 작동) ══ -->
+<div id="assist-anim">ASSIST!</div>
+<div id="sync-anim">SYNCHRONIZE!</div>
+<div id="umbreon-anim">OVERRIDE!</div>
+
 <!-- ══ 인트로 오버레이 ══ -->
 <div id="intro-overlay">
   <div id="touch-prompt">아무데나 터치하여 시작!</div>
@@ -503,9 +508,6 @@ height: 400px;
 
 <!-- ══ 배틀 화면 ══ -->
 <div id="battle-wrapper">
-  <div id="assist-anim">ASSIST!</div>
-  <div id="sync-anim">SYNCHRONIZE!</div>
-  <div id="umbreon-anim">OVERRIDE!</div>
 
     <!-- 보스 -->
       <div id="boss-row">
@@ -531,11 +533,8 @@ height: 400px;
 
 <div class="battle">
 
-
   <div id="battle-screen">
     <div id="battle-top">
-
-    
 
       <!-- 플레이어 + 가운데 -->
       <div id="player-row">
@@ -695,35 +694,36 @@ height: 400px;
       </div>
     </div>
 
-   
   </div><!-- /battle-screen -->
-  <!-- 채팅 -->
-    <div id="chat-section">
-      <div id="chat-channel-label">레이드 채팅</div>
-      <div id="chat-messages"></div>
-      <div id="chat-input-row">
-        <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
-        <button id="chat-send-btn">전송</button>
-      </div>
-    </div>
 
-    <!-- 관전자 채팅 -->
-    <div id="spectator-chat-section">
-      <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
-        <div style="font-size:11px;color:#888;padding:4px 8px;background:#f5f5f5;border-bottom:1px solid #eee;">관전자 채팅</div>
-        <div id="spectator-chat-messages"></div>
-        <div style="display:flex;border-top:1px solid #eee;">
-          <input id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200"
-            style="flex:1;border:none;padding:5px 8px;font-size:12px;outline:none;font-family:inherit;">
-          <button id="spectator-chat-send-btn"
-            style="border:none;background:#888;color:#fff;padding:0 12px;cursor:pointer;font-size:12px;">전송</button>
-        </div>
+  <!-- 채팅 -->
+  <div id="chat-section">
+    <div id="chat-channel-label">레이드 채팅</div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-row">
+      <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
+      <button id="chat-send-btn">전송</button>
+    </div>
+  </div>
+
+  <!-- 관전자 채팅 -->
+  <div id="spectator-chat-section">
+    <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+      <div style="font-size:11px;color:#888;padding:4px 8px;background:#f5f5f5;border-bottom:1px solid #eee;">관전자 채팅</div>
+      <div id="spectator-chat-messages"></div>
+      <div style="display:flex;border-top:1px solid #eee;">
+        <input id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200"
+          style="flex:1;border:none;padding:5px 8px;font-size:12px;outline:none;font-family:inherit;">
+        <button id="spectator-chat-send-btn"
+          style="border:none;background:#888;color:#fff;padding:0 12px;cursor:pointer;font-size:12px;">전송</button>
       </div>
     </div>
-</div>
+  </div>
+
+</div><!-- /battle -->
 </div><!-- /battle-wrapper -->
 
-<script>const ROOM_ID = "raidroom3"</script>
+<script>const ROOM_ID = "raidroom1"</script>
 <script type="module" src="../js/raidchat.js"></script>
 <script type="module" src="../js/raidintro.js"></script>
 <script type="module" src="../js/raid.js"></script>
