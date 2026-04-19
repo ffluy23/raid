@@ -359,25 +359,6 @@ function applyAoeFriendlyFire(myPkmn, mySlot, moveName, entries, data, logEntrie
   }
 }
 
-// 싱크로나이즈 데미지 분산
-function applySyncDistribution(rawDamage, targetSlot, entries, data, logEntries) {
-  const syncActive = data.sync_active ?? false
-  if (!syncActive) return { distributed: false, damages: { [targetSlot]: rawDamage } }
-  const alivePlayers = PLAYER_SLOTS.filter(s => {
-    const idx = data[`${s}_active_idx`] ?? 0
-    const p   = entries[s]?.[idx]
-    return p && p.hp > 0
-  })
-  if (alivePlayers.length <= 1) {
-    return { distributed: false, damages: { [targetSlot]: rawDamage }, clearSync: true }
-  }
-  const share   = Math.max(1, Math.floor(rawDamage / alivePlayers.length))
-  const damages = {}
-  alivePlayers.forEach(s => { damages[s] = share })
-  logEntries.push(makeLog("sync", ""))
-  logEntries.push(makeLog("after_hit", `💠 싱크로나이즈! ${alivePlayers.length}명이 데미지를 균등 분산! (각 ${share})`))
-  return { distributed: true, damages, clearSync: true }
-}
 
 // 2턴 기술 공통 처리
 function handleTwoTurnAttack(myPkmn, mySlot, targetSlot, entries, data, logEntries, opts = {}) {
@@ -390,9 +371,7 @@ function handleTwoTurnAttack(myPkmn, mySlot, targetSlot, entries, data, logEntri
     if (!hit) { logEntries.push(makeLog("normal", hitType === "evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : "빗나갔다!")); return }
     const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
     if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return }
-    const { distributed, damages, clearSync } = applySyncDistribution(damage, targetSlot, entries, data, logEntries)
-    applyDamagesToPlayers(damages, entries, data, logEntries)
-    if (clearSync) data.sync_active = false
+   applyDamagesToPlayers({ [targetSlot]: damage }, entries, data, logEntries)
   } else {
     // 보스 대상 or 독침붕 대상 분기
     if (isBeedrillSlot(targetSlot)) {
@@ -930,8 +909,25 @@ export default async function handler(req, res) {
               attackAllBeedrills(myPkmn, mySlot, moveData.name, moveInfo, data, logEntries, { isAssistCaster })
             } else {
               // 단일 독침붕 타겟
-              for (const bSlot of targetBeedrillSlots) {
-                attackBeedrill(myPkmn, mySlot, bSlot, moveData.name, moveInfo, data, logEntries, { isAssistCaster })
+            for (const bSlot of targetBeedrillSlots) {
+                const dmgDealt = attackBeedrill(myPkmn, mySlot, bSlot, moveData.name, moveInfo, data, logEntries, { isAssistCaster })
+                // ── 어시스트 추가 공격 (독침붕) ──────────────────
+                if (isAssistCaster && dmgDealt > 0) {
+                  const bee = getBeedrill(data, bSlot)
+                  if (bee && bee.hp > 0) {
+                    const supporters = PLAYER_SLOTS.filter(s => s !== mySlot)
+                    for (const supSlot of supporters) {
+                      const supIdx  = data[`${supSlot}_active_idx`] ?? 0
+                      const supPkmn = entries[supSlot]?.[supIdx]
+                      if (!supPkmn || supPkmn.hp <= 0) continue
+                      const bonusDmg = Math.max(1, Math.floor(dmgDealt * 0.3))
+                      logEntries.push(makeLog("assist", ""))
+                      applyDamageToBeedrill(data, bSlot, bonusDmg, logEntries)
+                      logEntries.push(makeLog("after_hit", `${supPkmn.name}${josa(supPkmn.name, "이가")} 추가 공격했다! (${bonusDmg} 데미지)`))
+                      if (bee.hp <= 0) break
+                    }
+                  }
+                }
               }
             }
             // 하이퍼빔
@@ -990,7 +986,25 @@ export default async function handler(req, res) {
                 else if (critical)  logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
                 if (isAssistCaster) logEntries.push(makeLog("after_hit", "어시스트 효과로 위력이 올라갔다!"))
                 if (data.boss_current_hp <= 0) logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
-
+// ── 어시스트 추가 공격 ────────────────────────────────────
+if (isAssistCaster && finalDmg > 0 && data.boss_current_hp > 0) {
+  const supporters = PLAYER_SLOTS.filter(s => s !== mySlot)
+  for (const supSlot of supporters) {
+    const supIdx  = data[`${supSlot}_active_idx`] ?? 0
+    const supPkmn = entries[supSlot]?.[supIdx]
+    if (!supPkmn || supPkmn.hp <= 0) continue
+    const bonusDmg = Math.max(1, Math.floor(finalDmg * 0.3))
+    data.boss_current_hp = Math.max(0, data.boss_current_hp - bonusDmg)
+    logEntries.push(makeLog("assist", ""))
+    logEntries.push(makeLog("hit",       "", { defender: "boss" }))
+    logEntries.push(makeLog("hp",        "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
+    logEntries.push(makeLog("after_hit", `${supPkmn.name}${josa(supPkmn.name, "이가")} 추가 공격했다! (${bonusDmg} 데미지)`))
+    if (data.boss_current_hp <= 0) {
+      logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
+      break
+    }
+  }
+}
                 if (moveInfo?.effect?.drain && finalDmg > 0) {
                   const heal = Math.max(1, Math.floor(finalDmg * moveInfo.effect.drain))
                   myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
