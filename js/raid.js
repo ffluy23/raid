@@ -484,6 +484,16 @@ async function processLogQueue() {
           lastDiceEventTs = data.dice_event.ts
           await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
         }
+
+         if (data.assist_event?.ts && data.assist_event.ts > lastAssistEventTs) {
+          lastAssistEventTs = data.assist_event.ts
+          showAssistAnimation()
+        }
+        if (data.sync_event?.ts && data.sync_event.ts > lastSyncEventTs) {
+          lastSyncEventTs = data.sync_event.ts
+          showSyncAnimation()
+        }
+        
         applyRoomData(data)
       }, 80)
     }
@@ -1086,6 +1096,8 @@ function listenLogs(gameStartedAt) {
 }
 
 let lastDiceEventTs = 0
+let lastAssistEventTs = 0
+let lastSyncEventTs   = 0
 
 // ── 룸 리스너 ────────────────────────────────────────────────────────
 function listenRoom() {
@@ -1189,6 +1201,16 @@ function listenRoom() {
     }
 
     if (!isProcessing && logQueue.length === 0) {
+
+       if (data.assist_event?.ts && data.assist_event.ts > lastAssistEventTs) {
+        lastAssistEventTs = data.assist_event.ts
+        showAssistAnimation()
+      }
+      if (data.sync_event?.ts && data.sync_event.ts > lastSyncEventTs) {
+        lastSyncEventTs = data.sync_event.ts
+        showSyncAnimation()
+      }
+
       applyRoomData(data)
     } else {
       pendingRoomData = data

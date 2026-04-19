@@ -643,7 +643,7 @@ export default async function handler(req, res) {
   const targetBossOrPlayer  = tSlots.filter(s => !isBeedrillSlot(s))
   const isBeedrillTarget    = targetBeedrillSlots.length > 0
   // aoe 기술이고 독침붕이 살아있으면 독침붕 전체 대상
-  const isAoeToBeedrills    = isAttackMove && moveInfo?.aoe && anyBeedrillAlive(data)
+ const isAoeToBeedrills = isAttackMove && (moveInfo?.aoe || moveInfo?.aoeEnemy) && anyBeedrillAlive(data)
 
   const assistActive   = data.assist_active ?? false
   const assistFrom     = data.assist_request_from ?? null
