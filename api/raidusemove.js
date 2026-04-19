@@ -858,15 +858,29 @@ export default async function handler(req, res) {
             logEntries.push(makeLog("normal", "그러나 아무 일도 일어나지 않았다!"))
             specialHandled = true
           } else if (moveInfo?.effect?.heal && moveInfo.targetSelf !== false) {
-            if ((myPkmn.healBlocked ?? 0) <= 0) {
-              const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * moveInfo.effect.heal))
-              myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
-              logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
-            } else {
-              logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
-            }
-            specialHandled = true
-         } else if (!specialHandled) {
+  if ((myPkmn.healBlocked ?? 0) > 0) {
+    logEntries.push(makeLog("normal", "회복이 봉인돼 있어서 실패했다!"))
+  } else if (moveInfo?.waterHeal) {
+    // 아군 전원 회복
+    for (const s of PLAYER_SLOTS) {
+      const idx  = data[`${s}_active_idx`] ?? 0
+      const pkmn = entries[s]?.[idx]
+      if (!pkmn || pkmn.hp <= 0) continue
+      if ((pkmn.healBlocked ?? 0) > 0) {
+        logEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 회복이 봉인돼 있다!`))
+        continue
+      }
+      const heal = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * moveInfo.effect.heal))
+      pkmn.hp    = Math.min(pkmn.maxHp ?? pkmn.hp, pkmn.hp + heal)
+      logEntries.push(makeLog("hp", `${pkmn.name}${josa(pkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
+    }
+  } else {
+    const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * moveInfo.effect.heal))
+    myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
+    logEntries.push(makeLog("hp", `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`, { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }))
+  }
+  specialHandled = true
+} else if (!specialHandled) {
   const effectTarget = moveInfo?.targetSelf === false ? fakeBoss : myPkmn
   applyRankChanges(moveInfo?.rank ?? null, myPkmn, effectTarget, moveData.name, logEntries)
   applyMoveEffect(moveInfo?.effect, myPkmn, effectTarget, 0).forEach(m => logEntries.push(makeLog("normal", m)))

@@ -303,7 +303,7 @@
       <div>
         <div class="eyebrow">Case Archive</div>
         <h1>조사 현황</h1>
-        <p class="sub">작성자: Sonnet</p>
+        <p class="sub">ID: Sonnet</p>
       </div>
       <div class="status-badge" id="selected-badge">미선택</div>
     </div>
@@ -311,10 +311,10 @@
     <!-- 모바일 탭 -->
     <div class="zone-tabs" id="zone-tabs">
       <button class="zone-tab" data-zone="A">
-        <span class="tab-label">구역 A</span>숲
+        <span class="tab-label">구역 A</span>숲 근처
       </button>
       <button class="zone-tab" data-zone="B">
-        <span class="tab-label">구역 B</span>안 정함
+        <span class="tab-label">구역 B</span>깊은 숲
       </button>
       <button class="zone-tab" data-zone="C">
         <span class="tab-label">구역 C</span>심해
@@ -325,17 +325,17 @@
     <div class="map">
       <button class="zone zone-a" data-zone="A">
         <span class="zone-label">구역 A</span>
-        <span class="zone-title">숲</span>
-        <span class="zone-boss">vs ???</span>
+        <span class="zone-title">아카데미 뒤쪽</span>
+        <span class="zone-boss">vs 앱솔</span>
       </button>
       <button class="zone zone-b" data-zone="B">
         <span class="zone-label">구역 B</span>
-        <span class="zone-title">안 정함</span>
+        <span class="zone-title">숲의 입구</span>
         <span class="zone-boss">vs ???</span>
       </button>
       <button class="zone zone-c" data-zone="C">
         <span class="zone-label">구역 C</span>
-        <span class="zone-title">심해</span>
+        <span class="zone-title">깊은 숲</span>
         <span class="zone-boss">vs ???</span>
       </button>
 
@@ -418,7 +418,7 @@
 <script>
   const zoneData = {
     A: {
-      title: "숲", difficulty: "정밀 확인",
+      title: "아카데미 뒤쪽", difficulty: "정밀 확인",
       desc: "아마 여러 포켓몬이 다같이 난리를 피운 것 같아.",
       boss: "???", diff: "여러 마리? 한 마리가 아닌 것 같네.", trait: "빙결 / 눈보라", type: "불꽃, 격투",
       room: "raidroom1", bossId: "absol"
@@ -426,7 +426,7 @@
     B: {
       title: "깊은 숲", difficulty: "단서 확보",
       desc: "조사가 필요할 것 같아.",
-      boss: "???", diff: "특이하게 꽤 달콤한 향이 나더라구?", trait: "쾌청 / 지속 화상", type: "물, 바위",
+      boss: "???", diff: "꽤 달콤한 향이 나더라구.", trait: "쾌청 / 지속 화상", type: "물, 바위",
       room: "raidroom2", bossId: "beequeen"
     },
     C: {

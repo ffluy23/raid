@@ -1,0 +1,26 @@
+:root {
+  --bg: #101215;
+  --panel: rgba(255,255,255,0.06);
+  --line: rgba(255,255,255,0.12);
+  --text: #f3f4f6;
+  --muted: #a8b0bb;
+  --accent: #d3b57a;
+  --accent-soft: rgba(211,181,122,0.15);
+  --shadow: 0 24px 60px rgba(0,0,0,0.35);
+  --radius: 22px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(211,181,122,0.08), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255,255,255,0.05), transparent 20%),
+    linear-gradient(160deg, #0b0d10 0%, #14181d 55%, #0d1116 100%);
+  display: grid;
+  place-items: center;
+}
+
