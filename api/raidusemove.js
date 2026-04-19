@@ -502,6 +502,11 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
     const pkmn = entries[s]?.[idx]
     if (!pkmn || pkmn.hp <= 0) return
     tickRanks(pkmn, eotLogs)
+    if ((pkmn.tauntSelfTurns ?? 0) > 0) {
+  pkmn.tauntSelfTurns--
+  if (!pkmn.tauntSelfTurns)
+    eotLogs.push(makeLog("normal", `${pkmn.name}에게 고정된 집중이 풀렸다!`))
+}
     if ((pkmn.taunted ?? 0) > 0) {
       pkmn.taunted--
       if (!pkmn.taunted) eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 도발이 풀렸다!`))
@@ -830,14 +835,20 @@ export default async function handler(req, res) {
         // (원본 파일 구조 유지를 위해 별도 분리하지 않음 — 원본 함수를 그대로 사용)
 
         if (!moveInfo?.power) {
-          // 원본 비공격 처리 인라인 (원본 raidUseMove.js의 handleRaidSpecialNonAttack 블록)
-          // 이 부분은 원본 코드와 동일하게 유지
-          let specialHandled = false
+  // 원본 비공격 처리 인라인 (원본 raidUseMove.js의 handleRaidSpecialNonAttack 블록)
+  // 이 부분은 원본 코드와 동일하게 유지
+  let specialHandled = false
 
-          if (moveInfo?.defend) {
-            myPkmn.defending = true; myPkmn.defendTurns = 2
-            logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 방어 태세에 들어갔다!`))
-            specialHandled = true
+  if (moveInfo?.tauntSelf) {
+    myPkmn.tauntSelfTurns = moveInfo.tauntSelf.turns ?? 2
+    logEntries.push(makeLog("normal",
+      `${myPkmn.name}${josa(myPkmn.name, "은는")} 적의 공격을 끌어당긴다! (${myPkmn.tauntSelfTurns}턴)`
+    ))
+    specialHandled = true
+  } else if (moveInfo?.defend) {
+    myPkmn.defending = true; myPkmn.defendTurns = 2
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 방어 태세에 들어갔다!`))
+    specialHandled = true
           } else if (moveInfo?.endure) {
             myPkmn.enduring = true
             logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 버티기 태세에 들어갔다!`))
