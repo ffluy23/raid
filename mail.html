@@ -35,6 +35,11 @@ body {
   letter-spacing: 1px;
 }
 
+#mailList {
+  max-height: 300px; 
+  overflow-y: auto;
+}
+
 .mail-item {
   padding: 10px;
   border: 1px solid #2a2f3a;
@@ -185,6 +190,13 @@ body {
     padding: 13px;
     font-size: 13px;
   }
+
+  @media (max-width: 480px) {
+  #mailList {
+    max-height: 60vh;   
+    overflow-y: auto;
+  }
+}
 }
 </style>
 </head>
@@ -236,6 +248,22 @@ const threads = [
       }
     ]
   },
+   {
+    title: "소넷쌤",
+    mails: [
+      {
+        from: "love123@zenith.poke",
+        to: "sonnet@zenith.poke",
+        content:"ZP 좀 주시면 안될까요"
+      },
+      {
+        from: "sonnet@zenith.poke",
+        to: "love123@zenith.poke",
+        content: "ㅇ",
+        sent: true
+      }
+    ]
+  },
   {
     title: "[내부공지] 아카데미 행사 참여 안내",
     mails: [
@@ -264,6 +292,54 @@ const threads = [
         from: "sonnet@zenith.poke",
         to: "no-reply@pokemonaca.com",
         content: "연결 가능한 인원 확보 부탁드립니다.\n좌표와 함께 보내주시면 즉시 이동하겠습니다.",
+        sent: true
+      }
+    ]
+  },
+   {
+    title: "[연구실] 개체 수 통제 불가 상태 진입",
+    mails: [
+      {
+        from: "no-reply@pokemonaca.com",
+        to: "sonnet@zenith.poke",
+        content: "소넷 선생님께,\n\n개체 수 증가 속도가 예측치를 초과했습니다.\n초기 관측 대비 약 3배 이상으로 확인됩니다.\n\n더 큰 문제는 일부 개체가 자발적으로 이동 경로를 형성하고 있다는 점입니다.\n이동 방향이 북서쪽을 벗어나 아카데미 방향으로 확장되고 있습니다.\n\n현장 인원 몇 명이 여전히 대응 중이나, 현재 상태로는 철수 권고가 필요한 수준입니다.\n\n통신 간헐적으로 끊기고 있습니다.\n좌표 재전송 시도 중입니다.\n\n가능한 한 빠른 개입 부탁드립니다.\n\n연구팀 드림."
+      },
+      {
+        from: "sonnet@zenith.poke",
+        to: "no-reply@pokemonaca.com",
+        content: "현장 인원 즉시 철수시키세요.\n\n이동 경로 계속 추적해서 공유 바랍니다.\n확산 방향만 확보되면 차단 라인 설정 가능합니다.\n\n좌표 재전송 부탁드립니다.",
+        sent: true
+      }
+    ]
+  },
+  {
+    title: "[연구실] 특정 개체 식별",
+    mails: [
+      {
+        from: "no-reply@pokemonaca.com",
+        to: "sonnet@zenith.poke",
+        content: "소넷 선생님께,\n\n현장에서 반복적으로 관측되는 개체가 있습니다.\n\n다른 개체들과 달리 중심부에서 거의 이동하지 않으며, 주변 개체들이 해당 개체를 기준으로 행동하는 양상이 포착되었습니다.\n\n임시로 코어 개체로 분류했습니다."
+      },
+      {
+        from: "sonnet@zenith.poke",
+        to: "no-reply@pokemonaca.com",
+        content: "위치 특정됩니까?",
+        sent: true
+      }
+    ]
+  },
+  {
+    title: "[연구실] 좌표",
+    mails: [
+      {
+        from: "no-reply@pokemonaca.com",
+        to: "sonnet@zenith.poke",
+        content: "소넷 선생님께,\n\n현장"
+      },
+      {
+        from: "sonnet@zenith.poke",
+        to: "no-reply@pokemonaca.com",
+        content: "통신 문제 있습니까?",
         sent: true
       }
     ]
