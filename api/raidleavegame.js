@@ -95,6 +95,8 @@ export default async function handler(req, res) {
 
     // ── 독침붕 초기화 ────────────────────────────────────────
     Beedrill: [],
+    weather:      null,
+    weatherTurns: 0,
   })
 
   return res.status(200).json({ ok: true })

@@ -10,6 +10,11 @@ import {
   applyStatus, applyVolatile, tickVolatiles
 } from "../lib/effecthandler.js"
 import {
+  startWeather, tickWeather, endWeather,
+  applyWeatherDamage, getWeatherDamageMult,
+  patchMoveForWeather, getWeatherLog        
+} from "../lib/weather.js"
+import {
   deepCopyEntries, corsHeaders, rollD10
 } from "../lib/gameUtils.js"
 
@@ -134,12 +139,12 @@ function calcHit(atk, moveInfo, def) {
   const ds = Math.max(1, getBaseStat(def, "spd") - getStatusSpdPenalty(def))
   const atkSpdRank = getActiveRankVal(atk, "spd")
   const defSpdRank = getActiveRankVal(def, "spd")
-  const ev = Math.min(99, Math.max(0, 5 * (ds - as) + (defSpdRank - atkSpdRank)))
+  const ev = Math.min(10, Math.max(0, 2 * (ds - as) + (defSpdRank - atkSpdRank)))
   return Math.random() * 100 < ev ? { hit: false, hitType: "evaded" } : { hit: true, hitType: "hit" }
 }
 
 // ── 데미지 계산 (보스/플레이어 대상) ────────────────────────────────
-function calcDamage(atk, moveName, def, powerOverride = null, diceOverride = null) {
+function calcDamage(atk, moveName, def, powerOverride = null, diceOverride = null, weather = null) {
   const move = moves[moveName]
   if (!move) return { damage: 0, multiplier: 1, stab: false, critical: false, dice: 0 }
   const dice     = diceOverride ?? rollD10()
@@ -152,12 +157,13 @@ function calcDamage(atk, moveName, def, powerOverride = null, diceOverride = nul
   const power    = powerOverride ?? (move.power ?? 40)
   const atkStat  = getBaseStat(atk, "atk")
   const base     = power + atkStat * 4 + dice
-  const raw      = Math.floor(base * mult * (stab ? 1.3 : 1))
+  const weatherMult = getWeatherDamageMult(weather, move.type)
+const raw         = Math.floor(base * mult * (stab ? 1.3 : 1) * weatherMult)
   const atkRank  = getActiveRankVal(atk, "atk")
   const afterAtk = Math.max(0, raw + atkRank)
   const afterDef = afterAtk - getBaseStat(def, "def") * 3
-  const defRank  = getActiveRankVal(def, "def")
-  const baseDmg  = afterDef - defRank * 3
+  const defRank  = (moves[moveName]?.ignoreDefRank) ? 0 : getActiveRankVal(def, "def")
+const baseDmg  = afterDef - defRank * 3
   if (baseDmg <= 0) {
     const minDice   = Math.floor(Math.random() * 5) + 1
     const minDamage = minDice * 5
@@ -208,7 +214,7 @@ function validateBeedrillTarget(data, targetSlots, logEntries) {
   return true
 }
 
-function calcDamageToBeedrill(atk, moveName, bee, diceOverride = null) {
+function calcDamageToBeedrill(atk, moveName, bee, diceOverride = null, weather = null) {
   const move = moves[moveName]
   if (!move) return { damage: 0, multiplier: 1, stab: false, critical: false, dice: 0 }
   const dice     = diceOverride ?? rollD10()
@@ -221,11 +227,12 @@ function calcDamageToBeedrill(atk, moveName, bee, diceOverride = null) {
   const power    = move.power ?? 40
   const atkStat  = getBaseStat(atk, "atk")
   const base     = power + atkStat * 4 + dice
-  const raw      = Math.floor(base * mult * (stab ? 1.3 : 1))
+  const weatherMult = getWeatherDamageMult(weather, move.type)
+const raw         = Math.floor(base * mult * (stab ? 1.3 : 1) * weatherMult)
   const atkRank  = getActiveRankVal(atk, "atk")
   const afterAtk = Math.max(0, raw + atkRank)
   const defStat  = bee.defense ?? 3
-  const defRank  = getActiveRankVal(bee, "def")
+  const defRank  = (moves[moveName]?.ignoreDefRank) ? 0 : getActiveRankVal(bee, "def")
   const baseDmg  = afterAtk - defStat * 3 - defRank * 3
   if (baseDmg <= 0) {
     const minDice   = Math.floor(Math.random() * 5) + 1
@@ -271,6 +278,18 @@ function attackBeedrill(myPkmn, mySlot, beeSlot, moveName, moveInfo, data, logEn
     finalDmg = Math.floor(finalDmg * chargedMult)
     logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!"))
   }
+
+    if (myPkmn.helperBoost) {
+  finalDmg = Math.floor(finalDmg * 1.2)
+  myPkmn.helperBoost = false
+  logEntries.push(makeLog("after_hit", "도우미 효과로 위력이 올라갔다!"))
+}
+
+// ── [PATCH] 보복 ──
+            if (moves[moveName]?.comeback && myPkmn.tookDamageLastTurn) {
+  finalDmg = Math.floor(finalDmg * 1.6)
+  logEntries.push(makeLog("after_hit", "원한이 쌓인 일격!"))
+}
 
   finalDmg = Math.max(1, finalDmg)
 
@@ -332,6 +351,10 @@ function applyAoeFriendlyFire(myPkmn, mySlot, moveName, entries, data, logEntrie
     let baseDmg    = afterDef - defRank * 3
     let dmg = baseDmg <= 0 ? (Math.floor(Math.random() * 5) + 1) * 5 : baseDmg
     dmg = Math.max(1, Math.floor(dmg * 0.5))
+    // ── [PATCH] 빛의장막 피해 감소 ──
+if ((ally.lightScreen ?? 0) > 0) {
+  dmg = Math.floor(dmg * 0.75)
+}
     if (ally.enduring && dmg >= ally.hp) {
       ally.hp = 1; ally.enduring = false
       logEntries.push(makeLog("after_hit", `${ally.name}${josa(ally.name, "은는")} 버텼다!`))
@@ -440,6 +463,8 @@ async function finishTurn(roomRef, roomId, data, entries, logEntries, extraUpdat
     ...(assistEventTs !== null ? { assist_event: { ts: assistEventTs } } : {}),
     ...(syncEventTs   !== null ? { sync_event:   { ts: syncEventTs   } } : {}),
     ...extraUpdate,
+    weather:      data.weather      ?? null,
+    weatherTurns: data.weatherTurns ?? 0,
   }
   PLAYER_SLOTS.forEach(s => {
     if (data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`]
@@ -497,6 +522,12 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
       eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 아쿠아링으로 HP를 회복했다! (+${heal})`))
       eotLogs.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
     }
+    // 빛의장막 틱
+if ((pkmn.lightScreen ?? 0) > 0) {
+  pkmn.lightScreen--
+  if (!pkmn.lightScreen)
+    eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 빛의장막이 사라졌다!`))
+}
     if (pkmn.cursed && pkmn.hp > 0) {
       const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.25))
       pkmn.hp = Math.max(0, pkmn.hp - dmg)
@@ -504,6 +535,7 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
       eotLogs.push(makeLog("hp", "", { slot: s, hp: pkmn.hp, maxHp: pkmn.maxHp }))
       if (pkmn.hp <= 0) eotLogs.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
     }
+    pkmn.tookDamageLastTurn = false
     if (pkmn.status === "독" || pkmn.status === "화상") {
       const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 16))
       pkmn.hp = Math.max(0, pkmn.hp - dmg)
@@ -512,6 +544,30 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
       if (pkmn.hp <= 0) eotLogs.push(makeLog("faint", `${pkmn.name}${josa(pkmn.name, "은는")} 쓰러졌다!`, { slot: s }))
     }
   })
+   if (data.weather) {
+    const weatherLog = getWeatherLog(data.weather)
+    if (weatherLog) eotLogs.push(makeLog("normal", weatherLog + "!"))
+
+    const activePokemons = PLAYER_SLOTS
+      .map(s => ({ pokemon: entries[s]?.[data[`${s}_active_idx`] ?? 0], slot: s }))
+      .filter(e => e.pokemon && e.pokemon.hp > 0)
+
+    const { msgs } = applyWeatherDamage(data.weather, activePokemons)
+    msgs.forEach(m => eotLogs.push(makeLog(m.type, m.text, m.meta ?? null)))
+
+    const { expired, weatherTurns: newTurns } = tickWeather(data.weatherTurns ?? 0)
+    if (expired) {
+      const allActive = PLAYER_SLOTS
+        .map(s => entries[s]?.[data[`${s}_active_idx`] ?? 0])
+        .filter(Boolean)
+      const { msgs: endMsgs } = endWeather(data.weather, allActive)
+      endMsgs.forEach(m => eotLogs.push(makeLog(m.type, m.text, m.meta ?? null)))
+      data.weather      = null
+      data.weatherTurns = 0
+    } else {
+      data.weatherTurns = newTurns
+    }
+  }
   for (const tSlot of PLAYER_SLOTS) {
     const tIdx  = data[`${tSlot}_active_idx`] ?? 0
     const tPkmn = entries[tSlot]?.[tIdx]
@@ -530,7 +586,7 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
     }
     if (tPkmn.hp <= 0) eotLogs.push(makeLog("faint", `${tPkmn.name}${josa(tPkmn.name, "은는")} 쓰러졌다!`, { slot: tSlot }))
   }
-  if (eotLogs.length > 0) {
+ if (eotLogs.length > 0) {
     const logsRef = db.collection("raid").doc(roomId).collection("logs")
     const base    = Date.now()
     const batch   = db.batch()
@@ -538,6 +594,9 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
     await batch.commit()
     Object.assign(update, buildRaidEntryUpdate(entries))
   }
+  // ── [PATCH] EOT에서 변경된 날씨 update에 반영 ──
+  update.weather      = data.weather      ?? null
+  update.weatherTurns = data.weatherTurns ?? 0
   return checkRaidWin(entries, data.boss_current_hp ?? 0)
 }
 
@@ -583,6 +642,9 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: "사슬묶기로 사용 불가" })
   if (myPkmn.tormented && moveData.name === myPkmn.lastUsedMove)
     return res.status(403).json({ error: "트집으로 사용 불가" })
+  // ── [PATCH] noRepeat 기술 연속 사용 불가 ──
+if (moves[moveData.name]?.noRepeat && moveData.name === myPkmn.lastUsedMove)
+  return res.status(403).json({ error: "연속으로 사용할 수 없다" })
   const soundMoves = ["금속음","돌림노래","바크아웃","소란피기","싫은소리","울부짖기","울음소리","차밍보이스","비밀이야기","하이퍼보이스","매혹의보이스"]
   if ((myPkmn.throatChopped ?? 0) > 0 && soundMoves.includes(moveData.name))
     return res.status(403).json({ error: "지옥찌르기로 사용 불가" })
@@ -814,6 +876,47 @@ export default async function handler(req, res) {
           myPkmn.aquaRing = true
           logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 물의 베일로 몸을 감쌌다!`))
           specialHandled = true
+          } else if (moveInfo?.effect?.weather) {
+  const allActive = PLAYER_SLOTS
+    .map(s => entries[s]?.[data[`${s}_active_idx`] ?? 0])
+    .filter(Boolean)
+  const { msgs, weather: newW, weatherTurns: newT } =
+    startWeather(
+      moveInfo.effect.weather,
+      moveInfo.effect.weatherTurns ?? 5,
+      data.weather ?? null,
+      allActive
+    )
+  data.weather      = newW
+  data.weatherTurns = newT
+  msgs.forEach(m => logEntries.push(makeLog("normal", m)))
+  specialHandled = true
+
+  } else if (moveInfo?.lightScreen) {
+  myPkmn.lightScreen = 3
+  logEntries.push(makeLog("normal",
+    `${myPkmn.name}${josa(myPkmn.name, "이가")} ${moveData.name}을 쳤다!`
+  ))
+  specialHandled = true  
+  } else if (moveInfo?.helper) {
+  // targetSlots에서 아군 슬롯 찾기
+  const helperTarget = tSlots.find(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
+  if (!helperTarget) {
+    logEntries.push(makeLog("normal", "대상이 없다!"))
+  } else {
+    const tIdx  = data[`${helperTarget}_active_idx`] ?? 0
+    const tPkmn = entries[helperTarget]?.[tIdx]
+    if (!tPkmn || tPkmn.hp <= 0) {
+      logEntries.push(makeLog("normal", "대상이 쓰러져 있다!"))
+    } else {
+      tPkmn.helperBoost = true
+      logEntries.push(makeLog("normal",
+        `${myPkmn.name}${josa(myPkmn.name, "이가")} ${tPkmn.name}${josa(tPkmn.name, "을를")} 도와준다!`
+      ))
+    }
+  }
+  specialHandled = true
+
         } else if (moveInfo?.splash) {
           logEntries.push(makeLog("normal", "그러나 아무 일도 일어나지 않았다!"))
           specialHandled = true
@@ -920,7 +1023,8 @@ export default async function handler(req, res) {
 
           } else {
             // ── 보스 대상 ───────────────────────────────────────
-            const { hit, hitType } = calcHit(myPkmn, moveInfo, fakeBoss)
+            const effectiveMoveInfo = patchMoveForWeather(data.weather ?? null, moveData.name, moveInfo)
+const { hit, hitType }  = calcHit(myPkmn, effectiveMoveInfo, fakeBoss)
             if (!hit) {
               logEntries.push(makeLog("normal", hitType === "evaded"
                 ? `${bossName}${josa(bossName, "이가")} 피했다!`
@@ -932,7 +1036,8 @@ export default async function handler(req, res) {
                 if (myPkmn.hp <= 0) logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
               }
             } else {
-              const { damage, multiplier, critical, dice, minRoll, minDice } = calcDamage(myPkmn, moveData.name, fakeBoss)
+              const { damage, multiplier, critical, dice, minRoll, minDice } =
+                calcDamage(myPkmn, moveData.name, fakeBoss, null, null, data.weather ?? null)
               logEntries.push(makeLog("dice", "", { slot: mySlot, roll: dice }))
 
               if (multiplier === 0) {
@@ -943,6 +1048,19 @@ export default async function handler(req, res) {
                 const chargedMult = (myPkmn.charged && moveInfo?.type === "전기") ? 1.2 : 1.0
                 myPkmn.charged = false
                 if (chargedMult > 1) { finalDmg = Math.floor(finalDmg * chargedMult); logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!")) }
+
+                if (myPkmn.helperBoost) {
+  finalDmg = Math.floor(finalDmg * 1.2)
+  myPkmn.helperBoost = false
+  logEntries.push(makeLog("after_hit", "도우미 효과로 위력이 올라갔다!"))
+}
+
+// ── [PATCH] 보복 ──
+               if (moves[moveName]?.comeback && myPkmn.tookDamageLastTurn) {
+  finalDmg = Math.floor(finalDmg * 1.6)
+  logEntries.push(makeLog("after_hit", "원한이 쌓인 일격!"))
+}
+                
                 finalDmg = Math.max(1, finalDmg)
                 data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - finalDmg)
                 logEntries.push(makeLog("hit", "", { defender: "boss" }))
@@ -1041,6 +1159,8 @@ export default async function handler(req, res) {
     turn_count:      (data.turn_count ?? 1) + 1,
     turn_started_at: newOrder.length > 0 ? Date.now() : null,
     ...assistUpdate,
+    weather:      data.weather      ?? null,
+    weatherTurns: data.weatherTurns ?? 0,
   }
   PLAYER_SLOTS.forEach(s => {
     if (data[`${s}_active_idx`] !== undefined) update[`${s}_active_idx`] = data[`${s}_active_idx`]

@@ -72,6 +72,8 @@ export const moves = {
                   rapidSpin: true, rank: { spd: 1, turns: 3 } },
 "날따름": { power: 0, type: "노말", accuracy: 100, alwaysHit: true,
             tauntSelf: { turns: 2 }, targetSelf: true },
+"도우미": { power: 0, type: "노말", accuracy: 100, alwaysHit: true,
+            effect: null, targetSelf: false, helper: true },
   // ───── 불 ─────
   "화염바퀴":       { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
   "불꽃엄니":       { power: 40, type: "불", accuracy: 95, alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
@@ -355,6 +357,7 @@ export const moves = {
                   rank: { targetDef: -2, turns: 2 } },
   "철벽":       { power: 0,  type: "강철", accuracy: 85,  alwaysHit: true,  effect: null,
                   rank: { def: 2, turns: 2 } },
+  "거대해머": { power: 70, type: "강철", accuracy: 100, alwaysHit: false, effect: null, noRepeat: true },
 
   // ───── 페어리 ─────
   "문포스":         { power: 40, type: "페어리", accuracy: 100, alwaysHit: false, effect: null },

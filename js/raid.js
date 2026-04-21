@@ -325,11 +325,27 @@ function triggerAutoAction(data) {
     doUseMove(moveIdx, ["boss"], data); return
   }
 
+    // 도우미 자동발동: 랜덤 생존 아군
+  if (moveInfo.helper) {
+    const aliveAllies = otherPlayerSlots().filter(s => {
+      const aIdx = data[`${s}_active_idx`] ?? 0
+      const p    = data[`${s}_entry`]?.[aIdx]
+      return p && p.hp > 0
+    })
+    if (aliveAllies.length > 0) {
+      const target = aliveAllies[Math.floor(Math.random() * aliveAllies.length)]
+      doUseMove(moveIdx, [target], data)
+    } else {
+      doUseMove(moveIdx, [], data)
+    }
+    return
+  }
+
   const needsTarget = moveInfo.power || moveInfo.ghostDive || moveInfo.futureSight
     || moveInfo.taunt || moveInfo.memento || moveInfo.leechSeed || moveInfo.chainBind
     || moveInfo.poisonPowder || moveInfo.pollenPuff || moveInfo.curse
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
-    || (moveInfo.effect?.status && moveInfo.targetSelf === false)
+    || (moveInfo.effect?.status && moveInfo.targetSelf === false) || moveInfo.helper 
 
   doUseMove(moveIdx, needsTarget ? ["boss"] : [], data)
 }
@@ -693,13 +709,14 @@ function updateMoveButtons(data) {
     btn.style.boxShadow  = `inset 0 0 0 2px white, 0 0 0 2px ${color}`
 
     const lockedByTorment    = !!(myPokemon?.tormented && mv.name === myPokemon?.lastUsedMove)
+    const lockedByNoRepeat   = !!(moveInfo?.noRepeat && mv.name === myPokemon?.lastUsedMove)
     const soundMoves         = ["금속음","돌림노래","바크아웃","소란피기","싫은소리","울부짖기","울음소리","차밍보이스","비밀이야기","하이퍼보이스","매혹의보이스"]
     const lockedByThroatChop = !!((myPokemon?.throatChopped ?? 0) > 0 && soundMoves.includes(mv.name))
     const lockedByOutrage    = !!(myPokemon?.outrageState?.active)
     const lockedByTaunt      = !!((myPokemon?.taunted ?? 0) > 0 && !(moveInfo?.power > 0))
 
     const canUse = !isSpectator && !fainted && mv.pp > 0 && myTurn && !actionDone
-      && !isChainBlocked && !lockedByTorment && !lockedByThroatChop && !lockedByOutrage && !lockedByTaunt
+      && !isChainBlocked && !lockedByTorment && !lockedByNoRepeat && !lockedByThroatChop && !lockedByOutrage && !lockedByTaunt
     btn.disabled = !canUse
     btn.onclick  = canUse ? () => { playSound(SFX_BTN); onMoveClick(i, moveInfo, data) } : null
   }
@@ -707,6 +724,41 @@ function updateMoveButtons(data) {
 
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
+
+
+  // ── [PATCH] 도우미: 아군 타겟 선택 팝업 ──
+  if (moveInfo?.helper) {
+    const aliveAllies = otherPlayerSlots().filter(s => {
+      const aIdx = data[`${s}_active_idx`] ?? 0
+      const p    = data[`${s}_entry`]?.[aIdx]
+      return p && p.hp > 0
+    })
+    if (aliveAllies.length === 0) {
+      doUseMove(idx, [], data)
+      return
+    }
+    // 팝업 표시
+    const popup    = $("ally-target-popup")
+    const btnWrap  = $("ally-target-buttons")
+    const cancelBtn = $("ally-target-cancel")
+    if (!popup || !btnWrap) { doUseMove(idx, [], data); return }
+    btnWrap.innerHTML = ""
+    aliveAllies.forEach(s => {
+      const aIdx = data[`${s}_active_idx`] ?? 0
+      const p    = data[`${s}_entry`]?.[aIdx]
+      const btn  = document.createElement("button")
+      btn.textContent = p?.name ?? s
+      btn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #27ae60;background:#27ae60;color:#fff;cursor:pointer;font-size:11px;"
+      btn.onclick = () => {
+        popup.style.display = "none"
+        doUseMove(idx, [s], data)
+      }
+      btnWrap.appendChild(btn)
+    })
+    cancelBtn.onclick = () => { popup.style.display = "none" }
+    popup.style.display = "block"
+    return
+  }
 
   const hasBeedrills = anyBeedrillAlive(data)
 
