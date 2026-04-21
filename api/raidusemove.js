@@ -286,7 +286,7 @@ function attackBeedrill(myPkmn, mySlot, beeSlot, moveName, moveInfo, data, logEn
 }
 
 // ── [PATCH] 보복 ──
-            if (moves[moveName]?.comeback && myPkmn.tookDamageLastTurn) {
+            if (moves[moveData.name]?.comeback && myPkmn.tookDamageLastTurn) {
   finalDmg = Math.floor(finalDmg * 1.6)
   logEntries.push(makeLog("after_hit", "원한이 쌓인 일격!"))
 }
@@ -1056,7 +1056,7 @@ const { hit, hitType }  = calcHit(myPkmn, effectiveMoveInfo, fakeBoss)
 }
 
 // ── [PATCH] 보복 ──
-               if (moves[moveName]?.comeback && myPkmn.tookDamageLastTurn) {
+              if (moves[moveData.name]?.comeback && myPkmn.tookDamageLastTurn) {
   finalDmg = Math.floor(finalDmg * 1.6)
   logEntries.push(makeLog("after_hit", "원한이 쌓인 일격!"))
 }
