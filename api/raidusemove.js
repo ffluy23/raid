@@ -279,9 +279,9 @@ function attackBeedrill(myPkmn, mySlot, beeSlot, moveName, moveInfo, data, logEn
     logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!"))
   }
 
-    if (myPkmn.helperBoost) {
-  finalDmg = Math.floor(finalDmg * 1.2)
-  myPkmn.helperBoost = false
+    if (myPkmn.helperBoost && myPkmn.helperBoost !== 1) {
+  finalDmg = Math.floor(finalDmg * myPkmn.helperBoost)
+  myPkmn.helperBoost = 1
   logEntries.push(makeLog("after_hit", "도우미 효과로 위력이 올라갔다!"))
 }
 
@@ -893,11 +893,16 @@ if (moves[moveData.name]?.noRepeat && moveData.name === myPkmn.lastUsedMove)
   specialHandled = true
 
   } else if (moveInfo?.lightScreen) {
-  myPkmn.lightScreen = 3
+  PLAYER_SLOTS.forEach(s => {
+    const idx  = data[`${s}_active_idx`] ?? 0
+    const pkmn = entries[s]?.[idx]
+    if (!pkmn || pkmn.hp <= 0) return
+    pkmn.lightScreen = 3
+  })
   logEntries.push(makeLog("normal",
     `${myPkmn.name}${josa(myPkmn.name, "이가")} ${moveData.name}을 쳤다!`
   ))
-  specialHandled = true  
+  specialHandled = true
   } else if (moveInfo?.helper) {
   // targetSlots에서 아군 슬롯 찾기
   const helperTarget = tSlots.find(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
@@ -909,7 +914,7 @@ if (moves[moveData.name]?.noRepeat && moveData.name === myPkmn.lastUsedMove)
     if (!tPkmn || tPkmn.hp <= 0) {
       logEntries.push(makeLog("normal", "대상이 쓰러져 있다!"))
     } else {
-      tPkmn.helperBoost = true
+      tPkmn.helperBoost = (tPkmn.helperBoost ?? 1) * 1.2
       logEntries.push(makeLog("normal",
         `${myPkmn.name}${josa(myPkmn.name, "이가")} ${tPkmn.name}${josa(tPkmn.name, "을를")} 도와준다!`
       ))
@@ -1049,12 +1054,11 @@ const { hit, hitType }  = calcHit(myPkmn, effectiveMoveInfo, fakeBoss)
                 myPkmn.charged = false
                 if (chargedMult > 1) { finalDmg = Math.floor(finalDmg * chargedMult); logEntries.push(makeLog("after_hit", "충전된 전기로 위력이 올라갔다!")) }
 
-                if (myPkmn.helperBoost) {
-  finalDmg = Math.floor(finalDmg * 1.2)
-  myPkmn.helperBoost = false
+                if (myPkmn.helperBoost && myPkmn.helperBoost !== 1) {
+  finalDmg = Math.floor(finalDmg * myPkmn.helperBoost)
+  myPkmn.helperBoost = 1
   logEntries.push(makeLog("after_hit", "도우미 효과로 위력이 올라갔다!"))
 }
-
 // ── [PATCH] 보복 ──
               if (moves[moveData.name]?.comeback && myPkmn.tookDamageLastTurn) {
   finalDmg = Math.floor(finalDmg * 1.6)
