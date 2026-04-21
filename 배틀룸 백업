@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @import url('https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css');
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0f1115;
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: #d1d5db;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body::before {
+  content: "research_index/";
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+.menu-btn {
+  width: 280px;
+  max-width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #2a2f3a;
+  color: #d1d5db;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.12s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.menu-btn::before {
+  content: "📄 ";
+  opacity: 0.6;
+}
+
+.menu-btn::after {
+  content: ".dat";
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.menu-btn:hover {
+  background: #10131a;
+  padding-left: 14px;
+}
+
+.menu-btn:active {
+  transform: translateY(1px);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.02),
+    rgba(255,255,255,0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+/* ── 모바일 ── */
+@media (max-width: 480px) {
+  body::before {
+    font-size: 12px;
+  }
+
+  .menu-btn {
+    width: 100%;
+    padding: 13px 10px;
+    font-size: 14px;
+  }
+
+  .menu-btn:hover {
+    padding-left: 14px;
+  }
+}
+  </style>
+  <title>연구 자료</title>
+</head>
+<body>
+
+  <button class="menu-btn" onclick="location.href='pages/raidroom1.html'">숲</button>
+  <button class="menu-btn" onclick="location.href='pages/raidroom2.html'">바다</button>
+  <button class="menu-btn" onclick="location.href='pages/raidroom3.html'">산</button>
+
+</body>
+</html>
