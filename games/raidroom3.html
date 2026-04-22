@@ -442,30 +442,82 @@ body {
 /* 볼륨 */
 #volume-control { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 
-/* 채팅 */
-#chat-section { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; 
-display: flex;
+/* ── 채팅 공통 ── */
+#chat-section,
+#spectator-chat-section {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
   flex-direction: column;
   width: 250px;
-  flex-shrink: 0; 
-height: 400px;
+  flex-shrink: 0;
+  height: 400px;
 }
-#chat-channel-label { font-size: 11px; color: #888; padding: 4px 8px; background: #f5f5f5; border-bottom: 1px solid #eee; }
-#chat-messages { flex: 1; overflow-y: auto; padding: 5px 8px; font-size: 12px; line-height: 1.5; 
+
+#spectator-chat-section { display: none; }
+
+#chat-channel-label,
+#spectator-channel-label {
+  font-size: 11px; color: #888;
+  padding: 4px 8px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+/* 관전자 채팅은 라벨 색 다르게 */
+#spectator-channel-label { color: #7c5cbf; background: #f5f0ff; border-bottom-color: #e8dff8; }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.5;
   height: 0;
   min-height: 0;
 }
-.chat-message { margin: 1px 0; }
-.chat-nick    { font-weight: bold; color: #555; }
-.chat-action  { color: #999; font-style: italic; }
-#chat-input-row { display: flex; border-top: 1px solid #eee; }
-#chat-input { flex: 1; border: none; padding: 5px 8px; font-size: 12px; outline: none; font-family: inherit; }
-#chat-send-btn { border: none; background: #4caf50; color: #fff; padding: 0 12px; cursor: pointer; font-size: 12px; }
-#chat-send-btn:hover { background: #45a049; }
 
-/* 관전자 채팅 */
-#spectator-chat-section { display: none; }
-#spectator-chat-messages { height: 70px; overflow-y: auto; padding: 5px 8px; font-size: 12px; line-height: 1.5; }
+.chat-message { margin: 1px 0; }
+.chat-nick    { font-weight: bold; }
+
+/* 플레이어 채팅 닉네임 */
+.chat-message--player .chat-nick { color: #555; }
+
+/* 관전자 화면에서 플레이어 채팅 (읽기 전용, 흐리게) */
+.chat-message--player-readonly { opacity: 0.5; }
+.chat-message--player-readonly .chat-nick { color: #2e86c1; }
+
+/* 관전자 본인 채팅 */
+.chat-message--spectator .chat-nick { color: #7c5cbf; }
+
+.chat-action { color: #999; font-style: italic; }
+
+.chat-input-row {
+  display: flex;
+  border-top: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1; border: none;
+  padding: 5px 8px; font-size: 12px;
+  outline: none; font-family: inherit;
+}
+
+.chat-send-btn {
+  border: none; color: #fff;
+  padding: 0 12px; cursor: pointer; font-size: 12px;
+}
+
+/* 플레이어 전송 버튼 */
+#chat-send-btn         { background: #4caf50; }
+#chat-send-btn:hover   { background: #45a049; }
+
+/* 관전자 전송 버튼 */
+#spectator-chat-send-btn       { background: #7c5cbf; }
+#spectator-chat-send-btn:hover { background: #6a4eac; }
 
 /* ══ 모바일 ══ */
 @media (max-width: 640px) {
@@ -475,13 +527,9 @@ height: 400px;
     min-height: 100dvh; width: 100%; max-width: 100%;
     padding: 8px 6px 24px;
   }
-    .battle {
-    flex-direction: column;
-  }
-   #chat-section {
-    width: 100%;
-    height: 160px;
-  }
+  .battle { flex-direction: column; }
+  #chat-section,
+  #spectator-chat-section { width: 100%; height: 160px; }
   #boss-row-inner { grid-template-columns: 120px 1fr; gap: 10px; }
   .boss-portrait-wrap { max-width: 120px; }
   #player-row { grid-template-columns: 1fr; gap: 8px; }
@@ -700,29 +748,29 @@ height: 400px;
 
   </div><!-- /battle-screen -->
 
-  <!-- 채팅 -->
+  <!-- 플레이어 채팅 -->
   <div id="chat-section">
-    <div id="chat-channel-label">레이드 채팅</div>
-    <div id="chat-messages"></div>
-    <div id="chat-input-row">
-      <input id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
-      <button id="chat-send-btn">전송</button>
+    <div id="chat-channel-label">🗡 레이드 채팅</div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
+      <button class="chat-send-btn" id="chat-send-btn">전송</button>
     </div>
   </div>
 
+  <!-- 관전자 채팅 (관전자만 보임) -->
+ <div id="spectator-chat-section">
+  <!-- 플레이어 채팅 읽기 전용 -->
+  <div style="font-size:11px;color:#2e86c1;padding:4px 8px;background:#f0f6ff;border-bottom:1px solid #dce8f8;flex-shrink:0;">🗡 플레이어 채팅</div>
+  <div class="chat-messages" id="spectator-player-messages" style="flex:none;height:160px;border-bottom:1px solid #eee;"></div>
   <!-- 관전자 채팅 -->
-  <div id="spectator-chat-section">
-    <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
-      <div style="font-size:11px;color:#888;padding:4px 8px;background:#f5f5f5;border-bottom:1px solid #eee;">관전자 채팅</div>
-      <div id="spectator-chat-messages"></div>
-      <div style="display:flex;border-top:1px solid #eee;">
-        <input id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200"
-          style="flex:1;border:none;padding:5px 8px;font-size:12px;outline:none;font-family:inherit;">
-        <button id="spectator-chat-send-btn"
-          style="border:none;background:#888;color:#fff;padding:0 12px;cursor:pointer;font-size:12px;">전송</button>
-      </div>
-    </div>
+  <div id="spectator-channel-label">관전자 채팅</div>
+  <div class="chat-messages" id="spectator-chat-messages"></div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200">
+    <button class="chat-send-btn" id="spectator-chat-send-btn">전송</button>
   </div>
+</div>
 
 </div><!-- /battle -->
 </div><!-- /battle-wrapper -->

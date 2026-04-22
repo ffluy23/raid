@@ -106,11 +106,6 @@ export default async function handler(req, res) {
   resetOnSwitch(prevPkmn)
   nextPkmn.seeded = false
 
-  // 치유소원 회복
-  if (nextPkmn.healOnSwitchIn) {
-    nextPkmn.hp = nextPkmn.maxHp ?? nextPkmn.hp
-    nextPkmn.healOnSwitchIn = false
-  }
 
   // active_idx 먼저 반영 (장판 적용 대상 포켓몬 결정)
   data[`${mySlot}_active_idx`] = newIdx
@@ -119,6 +114,14 @@ export default async function handler(req, res) {
     `돌아와, ${prev}!`,
     `${myName}${josa(myName, "은는")} ${next}${josa(next, "을를")} 내보냈다!`,
   ]
+
+   // 치유소원 회복
+  if (data[`${mySlot}_healWish`]) {
+    const heal = Math.max(1, Math.floor((nextPkmn.maxHp ?? nextPkmn.hp) * 0.25))
+    nextPkmn.hp = Math.min(nextPkmn.maxHp ?? nextPkmn.hp, nextPkmn.hp + heal)
+    logs.push(`${nextPkmn.name}${josa(nextPkmn.name, "은는")} 치유소원으로 HP를 회복했다! (+${heal})`)
+    data[`${mySlot}_healWish`] = false
+  }
 
   // ── 기절 교체 or 유턴 강제교체: 턴 소모 없음 ────────────────
  if (isFainted || isForceSwitch) {
@@ -130,6 +133,7 @@ export default async function handler(req, res) {
       ...buildEntryUpdate(entries),
       [`${mySlot}_active_idx`]:   newIdx,
       [`force_switch_${mySlot}`]: false,
+      [`${mySlot}_healWish`]:     false,
       current_order:   newOrder,
       turn_count:      isForceSwitch ? (data.turn_count ?? 1) + 1 : (data.turn_count ?? 1),
       turn_started_at: newOrder.length > 0 ? Date.now() : null,
@@ -165,6 +169,7 @@ export default async function handler(req, res) {
     ...buildEntryUpdate(entries),
     [`${mySlot}_active_idx`]:   newIdx,
     [`force_switch_${mySlot}`]: false,
+    [`${mySlot}_healWish`]:     false,
     current_order:   newOrder,
     turn_count:      (data.turn_count ?? 1) + 1,
     turn_started_at: newOrder.length > 0 ? Date.now() : null,

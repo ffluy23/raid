@@ -759,14 +759,18 @@ body {
   </div>
 
   <!-- 관전자 채팅 (관전자만 보임) -->
-  <div id="spectator-chat-section">
-    <div id="spectator-channel-label">👁 관전자 채팅</div>
-    <div class="chat-messages" id="spectator-chat-messages"></div>
-    <div class="chat-input-row">
-      <input class="chat-input" id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200">
-      <button class="chat-send-btn" id="spectator-chat-send-btn">전송</button>
-    </div>
+ <div id="spectator-chat-section">
+  <!-- 플레이어 채팅 읽기 전용 -->
+  <div style="font-size:11px;color:#2e86c1;padding:4px 8px;background:#f0f6ff;border-bottom:1px solid #dce8f8;flex-shrink:0;">🗡 플레이어 채팅</div>
+  <div class="chat-messages" id="spectator-player-messages" style="flex:none;height:160px;border-bottom:1px solid #eee;"></div>
+  <!-- 관전자 채팅 -->
+  <div id="spectator-channel-label">관전자 채팅</div>
+  <div class="chat-messages" id="spectator-chat-messages"></div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200">
+    <button class="chat-send-btn" id="spectator-chat-send-btn">전송</button>
   </div>
+</div>
 
 </div><!-- /battle -->
 </div><!-- /battle-wrapper -->
