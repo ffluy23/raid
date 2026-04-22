@@ -259,6 +259,7 @@ export const moves = {
   "회복봉인":       { power: 0,  type: "에스퍼", accuracy: 100, alwaysHit: true,  effect: null,
                       healBlock: true, targetSelf: false, aoeEnemy: true },
   "미래예지":       { power: 0,  type: "에스퍼", accuracy: 100, alwaysHit: true,  effect: null, futureSight: true },
+  "사이코팽":           { power: 50, type: "에스퍼", accuracy: 100, alwaysHit: false, effect: null, breakBarrier: true },
 
   // ───── 벌레 ─────
   "달려들기":   { power: 40, type: "벌레", accuracy: 100, alwaysHit: false,
