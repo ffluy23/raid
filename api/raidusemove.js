@@ -1008,10 +1008,10 @@ export default async function handler(req, res) {
             const idx  = data[`${s}_active_idx`] ?? 0
             const pkmn = entries[s]?.[idx]
             if (!pkmn || pkmn.hp <= 0) return
-            pkmn.lightScreen = 3
+            pkmn.lightScreen = 5
           })
           logEntries.push(makeLog("normal",
-            `${myPkmn.name}${josa(myPkmn.name, "이가")} ${moveData.name}을 쳤다! (3턴간 팀 전체 피해 25% 감소)`
+            `${myPkmn.name}${josa(myPkmn.name, "이가")} ${moveData.name}을 쳤다!`
           ))
           specialHandled = true
         } else if (moveInfo?.helper) {
