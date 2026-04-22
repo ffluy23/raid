@@ -7,23 +7,27 @@ function formatMessage(text) {
   return text.replace(/\((.+?)\)/g, '<span class="chat-action">($1)</span>')
 }
 
-function appendMessage(container, nickname, text) {
+function appendMessage(container, nickname, text, type = "player") {
   const div = document.createElement("div")
-  div.className = "chat-message"
+  div.className = `chat-message chat-message--${type}`
   div.innerHTML = `<span class="chat-nick">${nickname}:</span> ${formatMessage(text)}`
   container.appendChild(div)
   container.scrollTop = container.scrollHeight
 }
 
 window.initRaidChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, gameStartedAt = 0 }) {
-  const rendered         = new Set()
+  const renderedPlayer    = new Set()
   const renderedSpectator = new Set()
 
   const labelEl = document.getElementById("chat-channel-label")
-  if (labelEl) labelEl.innerText = isSpectator ? "👁 관전자 채팅" : "🗡 레이드 채팅"
 
-  // ── 플레이어 채팅 구독 (플레이어만) ──────────────────────────
   if (!isSpectator) {
+    // ── 플레이어: chat 컬렉션만 ────────────────────────────────
+    if (labelEl) labelEl.innerText = "🗡 레이드 채팅"
+
+    const spectatorSection = document.getElementById("spectator-chat-section")
+    if (spectatorSection) spectatorSection.style.display = "none"
+
     const container = document.getElementById("chat-messages")
     if (container) {
       const ref = collection(db, "raid", ROOM_ID, "chat")
@@ -32,10 +36,10 @@ window.initRaidChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, gameSt
         : query(ref, orderBy("ts"))
       onSnapshot(q, snap => {
         snap.docs.forEach(d => {
-          if (rendered.has(d.id)) return
-          rendered.add(d.id)
+          if (renderedPlayer.has(d.id)) return
+          renderedPlayer.add(d.id)
           const { nickname, text } = d.data()
-          appendMessage(container, nickname, text)
+          appendMessage(container, nickname, text, "player")
         })
       })
     }
@@ -55,33 +59,45 @@ window.initRaidChat = function({ db, ROOM_ID, myUid, mySlot, isSpectator, gameSt
     const inputEl = document.getElementById("chat-input")
     if (inputEl) inputEl.addEventListener("keypress", e => { if (e.key === "Enter") sendChat() })
 
-    // 플레이어한테는 관전자 섹션 숨김
-    const spectatorSection = document.getElementById("spectator-chat-section")
-    if (spectatorSection) spectatorSection.style.display = "none"
-
   } else {
-    // ── 관전자: 플레이어 채팅 섹션 숨김 ─────────────────────────
+    // ── 관전자: 플레이어 채팅 읽기 + 관전자 채팅 읽기/쓰기 ────
+    if (labelEl) labelEl.innerText = "👁 관전 중"
+
     const chatSection = document.getElementById("chat-section")
     if (chatSection) chatSection.style.display = "none"
     const spectatorSection = document.getElementById("spectator-chat-section")
-    if (spectatorSection) spectatorSection.style.display = "block"
+    if (spectatorSection) spectatorSection.style.display = "flex"
 
-    // 관전자 채팅 구독 — spectator_chat 전용 컬렉션
-    const spectatorContainer = document.getElementById("spectator-chat-messages")
-    if (spectatorContainer) {
-      const ref = collection(db, "raid", ROOM_ID, "spectator_chat")
-      const q   = gameStartedAt > 0
-        ? query(ref, orderBy("ts"), where("ts", ">=", gameStartedAt))
-        : query(ref, orderBy("ts"))
-      onSnapshot(q, snap => {
-        snap.docs.forEach(d => {
-          if (renderedSpectator.has(d.id)) return
-          renderedSpectator.add(d.id)
-          const { nickname, text } = d.data()
-          appendMessage(spectatorContainer, nickname, text)
-        })
+    const container = document.getElementById("spectator-chat-messages")
+    if (!container) return
+
+    // 플레이어 채팅 구독 (읽기 전용, 다른 색 표시)
+    const playerRef = collection(db, "raid", ROOM_ID, "chat")
+    const playerQ   = gameStartedAt > 0
+      ? query(playerRef, orderBy("ts"), where("ts", ">=", gameStartedAt))
+      : query(playerRef, orderBy("ts"))
+    onSnapshot(playerQ, snap => {
+      snap.docs.forEach(d => {
+        if (renderedPlayer.has(d.id)) return
+        renderedPlayer.add(d.id)
+        const { nickname, text } = d.data()
+        appendMessage(container, `[플레이어] ${nickname}`, text, "player-readonly")
       })
-    }
+    })
+
+    // 관전자 채팅 구독
+    const spectRef = collection(db, "raid", ROOM_ID, "spectator_chat")
+    const spectQ   = gameStartedAt > 0
+      ? query(spectRef, orderBy("ts"), where("ts", ">=", gameStartedAt))
+      : query(spectRef, orderBy("ts"))
+    onSnapshot(spectQ, snap => {
+      snap.docs.forEach(d => {
+        if (renderedSpectator.has(d.id)) return
+        renderedSpectator.add(d.id)
+        const { nickname, text } = d.data()
+        appendMessage(container, nickname, text, "spectator")
+      })
+    })
 
     async function sendSpectatorChat() {
       const input = document.getElementById("spectator-chat-input")
