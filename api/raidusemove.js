@@ -135,6 +135,7 @@ function calcHit(atk, moveInfo, def, weather = null) {
     if (weather === "비")   accuracy = 100
     if (weather === "쾌청") accuracy = 50
   }
+  if ((atk.telekinesis ?? 0) > 0) return { hit: true, hitType: "hit" }
   if (Math.random() * 100 >= accuracy) return { hit: false, hitType: "missed" }
   if (def.flyState?.flying  && !moveInfo.twister) return { hit: false, hitType: "evaded" }
   if (def.digState?.digging && moveInfo._name !== "지진") return { hit: false, hitType: "evaded" }
@@ -187,7 +188,7 @@ function calcDamage(atk, moveName, def, powerOverride = null, atkStatOverride = 
     return { damage: minDamage, multiplier: mult, stab, critical: false, dice, minRoll: true, minDice }
   }
   const critRate = Math.min(100, atkStat * 2 + (move.highCrit ? 3 : 0))
-  const critical = Math.random() * 100 < critRate
+  const critical = move.alwaysCrit ? true : Math.random() * 100 < critRate
   return { damage: critical ? Math.floor(baseDmg * 1.5) : baseDmg, multiplier: mult, stab, critical, dice }
 }
 
@@ -249,7 +250,7 @@ function calcDamageToBeedrill(atk, moveName, bee, diceOverride = null, weather =
     return { damage: minDamage, multiplier: mult, stab, critical: false, dice, minRoll: true, minDice }
   }
   const critRate = Math.min(100, atkStat * 2 + (move.highCrit ? 3 : 0))
-  const critical = Math.random() * 100 < critRate
+  const critical = move.alwaysCrit ? true : Math.random() * 100 < critRate
   return { damage: critical ? Math.floor(baseDmg * 1.5) : baseDmg, multiplier: mult, stab, critical, dice }
 }
 
@@ -279,6 +280,18 @@ function calcPowerOverride(moveInfo, myPkmn, def = null) {
     else if (ratio <= 3) return 50
     else                 return 60
   }
+  if (moveInfo?.vengeance) {
+  const r = myPkmn.ranks ?? {}
+  const isDebuffed =
+    ((r.atkTurns ?? 0) > 0 && (r.atk ?? 0) < 0) ||
+    ((r.defTurns ?? 0) > 0 && (r.def ?? 0) < 0) ||
+    ((r.spdTurns ?? 0) > 0 && (r.spd ?? 0) < 0)
+  return isDebuffed ? 80 : 45
+}
+if (moveInfo?.saltWater && def) {
+  const hpRatio = def.hp / (def.maxHp ?? def.hp)
+  return hpRatio <= 0.5 ? 70 : 40
+}
   return null
 }
 
@@ -623,6 +636,11 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
       pkmn.throatChopped--
       if (!pkmn.throatChopped) eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 다시 소리를 낼 수 있게 됐다!`))
     }
+  if ((pkmn.telekinesis ?? 0) > 0) {
+  pkmn.telekinesis--
+  if (!pkmn.telekinesis)
+    eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "은는")} 다시 땅에 내려왔다!`))
+}
     if (pkmn.aquaRing) {
       const heal = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) * 0.0625))
       pkmn.hp = Math.min(pkmn.maxHp ?? pkmn.hp, pkmn.hp + heal)
@@ -820,16 +838,12 @@ export default async function handler(req, res) {
  // 수정
 const isAttackMove = !!(moveInfo?.power)
 if (isAttackMove && anyBeedrillAlive(data)) {
-  // 꽃가루경단처럼 아군만 타겟인 경우는 통과
-  const isAllyOnlyTarget =
-    tSlots.length > 0 && tSlots.every(s => PLAYER_SLOTS.includes(s))
-  if (!isAllyOnlyTarget) {
-    const isBeedrillOnlyTarget =
-      tSlots.length > 0 &&
-      tSlots.every(s => isBeedrillSlot(s) || PLAYER_SLOTS.includes(s))
-    if (!isBeedrillOnlyTarget) {
-      return res.status(403).json({ error: "감히 여왕을 건드리려고?" })
-    }
+  // aoe/aoeEnemy 기술은 빈 배열로 와도 독침붕 전체 공격으로 처리 → 통과
+  const isAoe = !!(moveInfo?.aoe || moveInfo?.aoeEnemy)
+  const isAllyOnlyTarget = tSlots.length > 0 && tSlots.every(s => PLAYER_SLOTS.includes(s))
+  const isBeedrillOnlyTarget = tSlots.length > 0 && tSlots.every(s => isBeedrillSlot(s) || PLAYER_SLOTS.includes(s))
+  if (!isAoe && !isAllyOnlyTarget && !isBeedrillOnlyTarget) {
+    return res.status(403).json({ error: "감히 여왕을 건드리려고?" })
   }
 }
 
@@ -1205,7 +1219,7 @@ if (isAttackMove && anyBeedrillAlive(data)) {
               const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.18))
               tPkmn.hp   = Math.min(tPkmn.maxHp ?? tPkmn.hp, tPkmn.hp + heal)
               logEntries.push(makeLog("hp",
-                `${tPkmn.name}${josa(tPkmn.name, "은는")} 알낳기로 HP를 회복했다! (+${heal})`,
+                `${tPkmn.name}${josa(tPkmn.name, "은는")} HP를 회복했다! (+${heal})`,
                 { slot: ts, hp: tPkmn.hp, maxHp: tPkmn.maxHp }
               ))
             }
@@ -1216,7 +1230,7 @@ if (isAttackMove && anyBeedrillAlive(data)) {
               const heal = Math.max(1, Math.floor((myPkmn.maxHp ?? myPkmn.hp) * 0.22))
               myPkmn.hp  = Math.min(myPkmn.maxHp ?? myPkmn.hp, myPkmn.hp + heal)
               logEntries.push(makeLog("hp",
-                `${myPkmn.name}${josa(myPkmn.name, "은는")} 알낳기로 HP를 회복했다! (+${heal})`,
+                `${myPkmn.name}${josa(myPkmn.name, "은는")} HP를 회복했다! (+${heal})`,
                 { slot: mySlot, hp: myPkmn.hp, maxHp: myPkmn.maxHp }
               ))
             }
@@ -1252,7 +1266,7 @@ if (isAttackMove && anyBeedrillAlive(data)) {
                 ))
                 continue
               }
-              const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.5))
+              const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.22))
               tPkmn.hp   = Math.min(tPkmn.maxHp ?? tPkmn.hp, tPkmn.hp + heal)
               logEntries.push(makeLog("hp",
                 `${tPkmn.name}${josa(tPkmn.name, "은는")} 치유파동으로 HP를 회복했다! (+${heal})`,
@@ -1261,6 +1275,25 @@ if (isAttackMove && anyBeedrillAlive(data)) {
             }
           }
           specialHandled = true
+          } else if (moveInfo?.telekinesis) {
+  const telTargets = tSlots.filter(s => PLAYER_SLOTS.includes(s) && s !== mySlot)
+  if (telTargets.length === 0) {
+    logEntries.push(makeLog("normal", "대상이 없다!"))
+  } else {
+    for (const ts of telTargets) {
+      const tIdx  = data[`${ts}_active_idx`] ?? 0
+      const tPkmn = entries[ts]?.[tIdx]
+      if (!tPkmn || tPkmn.hp <= 0) {
+        logEntries.push(makeLog("normal", "대상이 쓰러져 있다!"))
+        continue
+      }
+      tPkmn.telekinesis = 3
+      logEntries.push(makeLog("normal",
+        `${tPkmn.name}${josa(tPkmn.name, "은는")} 텔레키네시스로 떠올랐다! (3턴간 모든 공격 명중)`
+      ))
+    }
+  }
+  specialHandled = true
         } else if (moveInfo?.splash) {
           logEntries.push(makeLog("normal", "그러나 아무 일도 일어나지 않았다!"))
           specialHandled = true
@@ -1617,6 +1650,32 @@ if (isAttackMove && anyBeedrillAlive(data)) {
                     }
                     applyRankChanges(selfRank, myPkmn, myPkmn, moveData.name, logEntries)
                   }
+                  if (moveInfo?.jealousFlame && finalDmg > 0) {
+  const bRank = data.boss_rank ?? defaultRanks()
+  const wasBoosted =
+    (bRank.atkTurns ?? 0) > 0 ||
+    (bRank.defTurns ?? 0) > 0 ||
+    (bRank.spdTurns ?? 0) > 0
+  if (wasBoosted && !data.boss_status) {
+    data.boss_status = "화상"
+    logEntries.push(makeLog("normal", `질투의불꽃으로 ${bossName}${josa(bossName, "이가")} 화상을 입었다!`))
+  }
+}
+if (moveInfo?.bubbleAria && finalDmg > 0) {
+  if (data.boss_status === "화상") {
+    data.boss_status = null
+    logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "의")} 화상이 나았다!`))
+  }
+  for (const s of PLAYER_SLOTS) {
+    const idx  = data[`${s}_active_idx`] ?? 0
+    const pkmn = entries[s]?.[idx]
+    if (!pkmn || pkmn.hp <= 0) continue
+    if (pkmn.status === "화상") {
+      pkmn.status = null
+      logEntries.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 화상이 나았다!`))
+    }
+  }
+}
                   applyMoveEffect({ ...moveInfo?.effect, drain: 0, recoil: 0 }, myPkmn, fakeBoss, finalDmg).forEach(m => {
                     if (m.includes("상태")) data.boss_status = moveInfo.effect?.status ?? null
                     logEntries.push(makeLog("normal", m))
