@@ -301,9 +301,9 @@
   <section class="card board">
     <div class="board-header">
       <div>
-        <div class="eyebrow">Raid Lobby</div>
-        <h1>구역을 선택하세요</h1>
-        <p class="sub">탐험할 구역을 고르고 레디하면 레이드가 시작돼.</p>
+        <div class="eyebrow">Case Archive</div>
+        <h1>조사 현황</h1>
+        <p class="sub">ID: Sonnet</p>
       </div>
       <div class="status-badge" id="selected-badge">미선택</div>
     </div>
@@ -311,13 +311,13 @@
     <!-- 모바일 탭 -->
     <div class="zone-tabs" id="zone-tabs">
       <button class="zone-tab" data-zone="A">
-        <span class="tab-label">구역 A</span>설원
+        <span class="tab-label">구역 A</span>숲 깊은 곳
       </button>
       <button class="zone-tab" data-zone="B">
-        <span class="tab-label">구역 B</span>화산
+        <span class="tab-label">구역 B</span>숲의 입구
       </button>
       <button class="zone-tab" data-zone="C">
-        <span class="tab-label">구역 C</span>심해
+        <span class="tab-label">구역 C</span>아카데미 뒤쪽
       </button>
     </div>
 
@@ -325,18 +325,18 @@
     <div class="map">
       <button class="zone zone-a" data-zone="A">
         <span class="zone-label">구역 A</span>
-        <span class="zone-title">설원</span>
-        <span class="zone-boss">vs 빙룡</span>
+        <span class="zone-title">숲 깊은 곳</span>
+        <span class="zone-boss">vs ???</span>
       </button>
       <button class="zone zone-b" data-zone="B">
         <span class="zone-label">구역 B</span>
-        <span class="zone-title">화산</span>
-        <span class="zone-boss">vs 염룡</span>
+        <span class="zone-title">숲의 입구</span>
+        <span class="zone-boss">vs ???</span>
       </button>
       <button class="zone zone-c" data-zone="C">
         <span class="zone-label">구역 C</span>
-        <span class="zone-title">심해</span>
-        <span class="zone-boss">vs 해룡</span>
+        <span class="zone-title">아카데미 뒤쪽</span>
+        <span class="zone-boss">vs 앱솔</span>
       </button>
 
       <div class="pins" aria-hidden="true">
@@ -361,8 +361,8 @@
     <div class="section">
       <div class="section-title">구역 정보</div>
       <div class="facts">
-        <div class="fact"><span>보스</span><strong id="f-boss">—</strong></div>
-        <div class="fact"><span>난이도</span><strong id="f-diff">—</strong></div>
+        <div class="fact"><span>상대</span><strong id="f-boss">—</strong></div>
+        <div class="fact"><span>코멘트</span><strong id="f-diff">—</strong></div>
         <div class="fact"><span>특징</span><strong id="f-trait">—</strong></div>
         <div class="fact"><span>추천 타입</span><strong id="f-type">—</strong></div>
       </div>
@@ -413,27 +413,27 @@
 
 </main>
 
-<script>const ROOM_ID = "raidroom2"</script>
+<script>const ROOM_ID = "raidroom1"</script>
 <script type="module" src="../js/raidroom.js"></script>
 <script>
   const zoneData = {
     A: {
-      title: "설원", difficulty: "★★☆ 보통",
-      desc: "끝없이 펼쳐진 얼음 대지. 발소리조차 얼어붙는 이곳에 빙룡이 잠들어 있어.",
-      boss: "빙룡 크리오스", diff: "보통", trait: "빙결 / 눈보라", type: "불꽃, 격투",
-      room: "battleroom1"
+      title: "숲 깊은 곳", difficulty: "단서 확보",
+      desc: "조사가 필요할 것 같아.",
+      boss: "???", diff: "꽤 달콤한 향이 나더라구.", trait: "???", type: "바위, 전기, 얼음, 불꽃",
+      room: "raidroom2", bossId: "beequeen"
     },
     B: {
-      title: "화산", difficulty: "★★★ 어려움",
-      desc: "용암이 흐르는 분화구 심부. 열기만으로도 포켓몬이 지쳐가는 극한의 전장이야.",
-      boss: "염룡 이그니스", diff: "어려움", trait: "쾌청 / 지속 화상", type: "물, 바위",
-      room: "battleroom2"
+      title: "숲의 입구", difficulty: "정밀 확인",
+      desc: "아마 여러 포켓몬이 다같이 난리를 피운 것 같아.",
+      boss: "???", diff: "여러 마리? 한 마리가 아닌 것 같네.", trait: "???", type: "비행, 에스퍼, 페어리",
+      room: "raidroom3", bossId: "falinks"
     },
     C: {
-      title: "심해", difficulty: "★★★ 어려움",
-      desc: "빛조차 닿지 않는 심해 유적. 수압과 어둠 속에서 해룡이 기다리고 있어.",
-      boss: "해룡 아비스", diff: "어려움", trait: "비 / 잠수", type: "전기, 풀",
-      room: "battleroom3"
+      title: "아카데미 뒤쪽", difficulty: "동선 추적",
+      desc: "아까 봤지? 그 애가 간 방향.",
+      boss: "앱솔", diff: "앱솔을 따라가.", trait: "악", type: "격투, 벌레, 페어리",
+      room: "raidroom3", bossId: "absol"
     }
   }
 
