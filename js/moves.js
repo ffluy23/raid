@@ -220,6 +220,7 @@ rank: { targetAtk: -2, turns: 2 } },
   "똬리틀기": { power: 0,  type: "독", accuracy: 100, alwaysHit: true,  targetSelf: true, effect: null,
                 rank: { atk: 1, def: 1, spd: 1, turns: 3 } },
   "베놈쇼크": { power: 40, type: "독", accuracy: 100, alwaysHit: false, effect: null, venomShock: true },
+  "애시드봄":             { power: 30, type: "독", accuracy: 100, alwaysHit: false,  effect: null, rank: { targetDef: -2, turns: 2 }   },
 
   // ───── 땅 ─────
   "지진":       { power: 50, type: "땅", accuracy: 100, alwaysHit: false, effect: null, aoe: true },
