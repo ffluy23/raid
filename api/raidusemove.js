@@ -820,11 +820,16 @@ export default async function handler(req, res) {
  // 수정
 const isAttackMove = !!(moveInfo?.power)
 if (isAttackMove && anyBeedrillAlive(data)) {
-  const isBeedrillOnlyTarget =
-    tSlots.length > 0 &&
-    tSlots.every(s => isBeedrillSlot(s) || PLAYER_SLOTS.includes(s))
-  if (!isBeedrillOnlyTarget) {
-    return res.status(403).json({ error: "감히 여왕을 건드리려고?" })
+  // 꽃가루경단처럼 아군만 타겟인 경우는 통과
+  const isAllyOnlyTarget =
+    tSlots.length > 0 && tSlots.every(s => PLAYER_SLOTS.includes(s))
+  if (!isAllyOnlyTarget) {
+    const isBeedrillOnlyTarget =
+      tSlots.length > 0 &&
+      tSlots.every(s => isBeedrillSlot(s) || PLAYER_SLOTS.includes(s))
+    if (!isBeedrillOnlyTarget) {
+      return res.status(403).json({ error: "감히 여왕을 건드리려고?" })
+    }
   }
 }
 
@@ -1218,15 +1223,18 @@ if (isAttackMove && anyBeedrillAlive(data)) {
             }
           }
           specialHandled = true
-        } else if (moveInfo?.leechSeed) {
-          if (data.boss_seeded) {
-            logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} 이미 씨앗이 심어져 있다!`))
-          } else {
-            data.boss_seeded = true
-            data.boss_seeder = mySlot
-            logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "에게")} 씨앗이 심어졌다!`))
-          }
-          specialHandled = true
+       // 수정
+} else if (moveInfo?.leechSeed) {
+  if (anyBeedrillAlive(data)) {
+    logEntries.push(makeLog("normal", "독침붕이 있는 동안 비퀸에게 씨앗을 심을 수 없다!"))
+  } else if (data.boss_seeded) {
+    logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "은는")} 이미 씨앗이 심어져 있다!`))
+  } else {
+    data.boss_seeded = true
+    data.boss_seeder = mySlot
+    logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "에게")} 씨앗이 심어졌다!`))
+  }
+  specialHandled = true
         } else if (moveInfo?.healPulse) {
           const pulseTargets = tSlots.filter(s => PLAYER_SLOTS.includes(s))
           if (pulseTargets.length === 0) pulseTargets.push(mySlot)

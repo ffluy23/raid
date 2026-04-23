@@ -725,6 +725,56 @@ function updateMoveButtons(data) {
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
 
+  // ── 꽃가루경단: 아군 선택 팝업 먼저 ──
+  if (moveInfo?.pollenPuff) {
+    const aliveAllies = otherPlayerSlots().filter(s => {
+      const aIdx = data[`${s}_active_idx`] ?? 0
+      const p    = data[`${s}_entry`]?.[aIdx]
+      return p && p.hp > 0
+    })
+    if (aliveAllies.length > 0) {
+      const popup     = $("ally-target-popup")
+      const btnWrap   = $("ally-target-buttons")
+      const cancelBtn = $("ally-target-cancel")
+      if (!popup || !btnWrap) { doUseMove(idx, ["boss"], data); return }
+      btnWrap.innerHTML = ""
+      // 아군 버튼들
+      aliveAllies.forEach(s => {
+        const aIdx = data[`${s}_active_idx`] ?? 0
+        const p    = data[`${s}_entry`]?.[aIdx]
+        const btn  = document.createElement("button")
+        btn.textContent = p?.name ?? s
+        btn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #27ae60;background:#27ae60;color:#fff;cursor:pointer;font-size:11px;"
+        btn.onclick = () => { popup.style.display = "none"; doUseMove(idx, [s], data) }
+        btnWrap.appendChild(btn)
+      })
+      // 적 타겟(보스/독침붕) 버튼
+      const enemyBtn = document.createElement("button")
+      enemyBtn.textContent = anyBeedrillAlive(data) ? "독침붕" : "보스"
+      enemyBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #e74c3c;background:#e74c3c;color:#fff;cursor:pointer;font-size:11px;"
+      enemyBtn.onclick = () => {
+        popup.style.display = "none"
+        if (anyBeedrillAlive(data)) {
+          const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
+          if (aliveBees.length === 1) {
+            doUseMove(idx, [`beedrill_${aliveBees[0].i}`], data)
+          } else {
+            pendingMoveIdx  = idx
+            pendingMoveInfo = moveInfo
+            enterBeedrillTargetMode(data)
+          }
+        } else {
+          doUseMove(idx, ["boss"], data)
+        }
+      }
+      btnWrap.appendChild(enemyBtn)
+      cancelBtn.onclick = () => { popup.style.display = "none" }
+      popup.style.display = "block"
+      return
+    }
+    // 아군 없으면 바로 적 타겟
+  }
+
 
   // ── [PATCH] 도우미: 아군 타겟 선택 팝업 ──
   if (moveInfo?.helper) {
@@ -780,16 +830,17 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
-  const r = moveInfo?.rank
-  const targetsEnemy =
-    moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
-    || moveInfo?.taunt || moveInfo?.memento
-    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
-    || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
-    || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
-    || moveInfo?.pollenPuff || moveInfo?.curse
-    || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
-    || (moveInfo?.effect?.status && moveInfo?.targetSelf === false)
+ const r = moveInfo?.rank
+const targetsEnemy =
+  !moveInfo?.teamBoost &&  // ← 추가
+  (moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
+  || moveInfo?.taunt || moveInfo?.memento
+  || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
+  || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
+  || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
+  || moveInfo?.pollenPuff || moveInfo?.curse
+  || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
+  || (moveInfo?.effect?.status && moveInfo?.targetSelf === false))
 
   if (!targetsEnemy) {
     // 자기/아군 대상 기술 → 독침붕 관계없이 그냥 사용
