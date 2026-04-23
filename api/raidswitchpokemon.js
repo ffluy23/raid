@@ -115,10 +115,14 @@ export default async function handler(req, res) {
     `${myName}${josa(myName, "은는")} ${next}${josa(next, "을를")} 내보냈다!`,
   ]
 
-   // 치유소원 회복
+// 치유소원 회복
   if (data[`${mySlot}_healWish`]) {
-    const heal = Math.max(1, Math.floor((nextPkmn.maxHp ?? nextPkmn.hp) * 0.25))
+    const heal = Math.max(1, Math.floor((nextPkmn.maxHp ?? nextPkmn.hp) * 0.5))
     nextPkmn.hp = Math.min(nextPkmn.maxHp ?? nextPkmn.hp, nextPkmn.hp + heal)
+    if (nextPkmn.status) {
+      nextPkmn.status = null
+      logs.push(`${nextPkmn.name}${josa(nextPkmn.name, "의")} 상태이상이 치유됐다!`)
+    }
     logs.push(`${nextPkmn.name}${josa(nextPkmn.name, "은는")} 치유소원으로 HP를 회복했다! (+${heal})`)
     data[`${mySlot}_healWish`] = false
   }

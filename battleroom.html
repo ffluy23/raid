@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>연구자료</title>
+<title>연구 자료</title>
 <style>
 @import url('https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css');
 
@@ -14,6 +14,7 @@ body {
   font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color: #d1d5db;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   padding: 20px;
@@ -24,54 +25,96 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-.wrap {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
+body::before {
+  content: "research_index/";
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
 }
 
-.lock-card {
-  width: 300px;
+.menu-btn {
+  width: 280px;
   max-width: 100%;
-  padding: 22px;
-  background: #14171d;
-  border: 1px solid #2a2f3a;
-  border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #2a2f3a;
+  color: #d1d5db;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.12s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   box-sizing: border-box;
 }
 
-.lock-icon {
-  font-size: 20px;
-  margin-bottom: 10px;
-  color: #9ca3af;
+.menu-btn::before {
+  content: "📄 ";
+  opacity: 0.6;
 }
 
-.lock-icon.unlocked {
+.menu-btn::after {
+  content: ".dat";
   color: #6b7280;
+  font-size: 12px;
 }
 
-.title {
+.menu-btn:hover {
+  background: #10131a;
+  padding-left: 14px;
+}
+
+.menu-btn:active {
+  transform: translateY(1px);
+}
+
+/* 잠긴 버튼 */
+.menu-btn.locked::before {
+  content: "🔒 ";
+  opacity: 0.6;
+}
+
+/* ── 모달 ── */
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  z-index: 100;
+}
+
+.modal-bg.open {
+  display: flex;
+}
+
+.modal {
+  width: 300px;
+  max-width: 100%;
+  background: #14171d;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+  padding: 20px;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
+}
+
+.modal-title {
   font-size: 13px;
   color: #e5e7eb;
   margin-bottom: 4px;
 }
 
-.subtitle {
+.modal-sub {
   font-size: 12px;
   color: #6b7280;
-  margin-bottom: 12px;
-}
-
-.hint-box {
-  font-size: 12px;
-  background: #0d0f14;
-  border: 1px solid #2a2f3a;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 12px;
-  line-height: 1.5;
+  margin-bottom: 14px;
 }
 
 .input-row {
@@ -81,16 +124,17 @@ body {
 
 .input-row input {
   flex: 1;
-  min-width: 0; /* flex 안에서 input 넘침 방지 */
+  min-width: 0;
   padding: 9px;
   background: #0d0f14;
   border: 1px solid #2a2f3a;
   color: #e5e7eb;
-  font-size: 16px; /* iOS 줌 방지 */
+  font-size: 16px;
   border-radius: 4px;
   outline: none;
   transition: 0.15s;
   box-sizing: border-box;
+  font-family: inherit;
 }
 
 .input-row input:focus {
@@ -103,7 +147,7 @@ body {
   background: #1a1010;
 }
 
-.btn {
+.confirm-btn {
   padding: 9px 12px;
   background: #1c212b;
   border: 1px solid #2f3542;
@@ -113,113 +157,22 @@ body {
   cursor: pointer;
   transition: 0.15s;
   white-space: nowrap;
+  font-family: inherit;
 }
 
-.btn:hover {
-  background: #232938;
-}
-
-.btn:active {
-  transform: translateY(1px);
-}
+.confirm-btn:hover { background: #232938; }
+.confirm-btn:active { transform: translateY(1px); }
 
 .err-msg {
   font-size: 12px;
   margin-top: 8px;
   color: #6b7280;
-}
-
-/* ===== 모달 ===== */
-
-.modal-bg {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: none;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  box-sizing: border-box;
-}
-
-.modal-bg.open {
-  display: flex;
-}
-
-.modal {
-  width: 460px;
-  max-width: 100%;
-  max-height: 80vh;
-  overflow-y: auto;
-  background: #14171d;
-  border: 1px solid #2a2f3a;
-  border-radius: 6px;
-  padding: 16px;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset;
-  box-sizing: border-box;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h2 {
-  font-size: 14px;
-  font-weight: normal;
-  color: #e5e7eb;
-  margin: 0;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: #6b7280;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 4px 6px; /* 모바일 탭 영역 확보 */
-}
-
-.modal-tag-row {
-  margin-top: 8px;
-}
-
-.tag {
-  font-size: 11px;
-  color: #6b7280;
-  border: 1px solid #2a2f3a;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-.modal-divider {
-  height: 1px;
-  background: #2a2f3a;
-  margin: 10px 0;
-}
-
-.modal-body {
-  font-size: 13px;
-  line-height: 1.6;
-  color: #e5e7eb;
-}
-
-.letter-date {
-  font-size: 11px;
-  color: #6b7280;
-  margin-bottom: 10px;
-}
-
-.letter-sig {
-  margin-top: 14px;
-  font-size: 12px;
-  color: #9ca3af;
+  min-height: 18px;
 }
 
 body::after {
   content: "";
-  position: fixed; /* absolute → fixed: 스크롤해도 노이즈 유지 */
+  position: fixed;
   inset: 0;
   background: repeating-linear-gradient(
     to bottom,
@@ -234,6 +187,15 @@ body::after {
 
 /* ── 모바일 ── */
 @media (max-width: 480px) {
+  body::before { font-size: 12px; }
+
+  .menu-btn {
+    width: 100%;
+    padding: 13px 10px;
+    font-size: 14px;
+  }
+  .menu-btn:hover { padding-left: 14px; }
+
   .modal-bg {
     align-items: flex-end;
     padding: 0;
@@ -241,104 +203,137 @@ body::after {
 
   .modal {
     width: 100%;
-    max-height: 85vh;
     border-radius: 12px 12px 0 0;
-    padding: 20px 16px;
-  }
-
-  .input-row input {
-    padding: 11px 9px;
-  }
-
-  .btn {
-    padding: 11px 12px;
+    padding: 24px 16px;
   }
 }
 </style>
 </head>
 <body>
 
-<div class="wrap">
-  <div class="lock-card">
-    <div class="lock-icon" id="lock-emoji"></div>
-    <div class="title">잠금 처리된 문서</div>
-    <div class="subtitle">비밀번호를 입력</div>
-    <div class="hint-box">
+  <!-- 메인 비번 모달 (초기 진입) -->
+  <div class="modal-bg open" id="main-modal-bg">
+    <div class="modal">
+      <div class="modal-title">잠금 처리된 문서</div>
+      <div class="modal-sub">비밀번호를 입력</div>
+      <div class="input-row">
+        <input type="text" id="main-pw-input" placeholder="Password" autocomplete="off" />
+        <button class="confirm-btn" onclick="checkMainPw()">Enter</button>
+      </div>
+      <div class="err-msg" id="main-err-msg"></div>
     </div>
-    <div class="input-row">
-      <input type="text" id="pw-input" placeholder="Password" autocomplete="off" />
-      <button class="btn" onclick="checkPw()">Enter</button>
-    </div>
-    <div class="err-msg" id="err-msg"></div>
   </div>
-</div>
 
-<div class="modal-bg" id="modal" onclick="onBgClick(event)">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>연구 기록</h2>
-      <button class="close-btn" onclick="closeModal()">✕</button>
-    </div>
-    <div class="modal-tag-row">
-      <span class="tag">Sonnet</span>
-    </div>
-    <div class="modal-divider"></div>
-    <div class="modal-body">
-      <div class="letter-date">20xx년 x월 x일</div>
-      <button class="menu-btn" onclick="location.href='pages/raidroom1.html'">숲</button>
-  <button class="menu-btn" onclick="location.href='pages/raidroom2.html'">바다</button>
-  <button class="menu-btn" onclick="location.href='pages/raidroom3.html'">산</button>
-      <div class="letter-sig">소넷</div>
+  <!-- 파일 목록 (메인 비번 통과 후 표시) -->
+  <div id="file-list" style="display:none; flex-direction:column; align-items:center;">
+    <button class="menu-btn" onclick="location.href='pages/raidroom1.html'">기밀 자료1</button>
+    <button class="menu-btn locked" onclick="openLock('pages/raidroom2.html', '2')">기밀 자료2</button>
+    <button class="menu-btn locked" onclick="openLock('pages/raidroom3.html', '3')">기밀 자료3</button>
+  </div>
+
+  <!-- 서브 비번 모달 (기밀 2, 3용) -->
+  <div class="modal-bg" id="sub-modal-bg" onclick="onBgClick(event)">
+    <div class="modal" id="sub-modal">
+      <div class="modal-title" id="modal-title">잠금 처리된 문서</div>
+      <div class="modal-sub">비밀번호를 입력</div>
+      <div class="input-row">
+        <input type="text" id="pw-input" placeholder="Password" autocomplete="off" />
+        <button class="confirm-btn" onclick="checkPw()">Enter</button>
+      </div>
+      <div class="err-msg" id="err-msg"></div>
     </div>
   </div>
-</div>
 
 <script>
-  const PW = "보송송의매력은어디까지인가메리프를사랑하는소넷과함께라스트댄스";
-  const input = document.getElementById("pw-input");
-  const errMsg = document.getElementById("err-msg");
-  const lockEmoji = document.getElementById("lock-emoji");
-  const modal = document.getElementById("modal");
+  const MAIN_PW = "메리프의전기저항과보송함의상관관계";
+  const PASSWORDS = {
+    '2': '보송송의매력은어디까지인가',
+    '3': '전룡이되기전그순간을영원히기억해',
+  };
 
-  input.addEventListener("keydown", e => {
-    if (e.key === "Enter") checkPw();
+  // ── 메인 비번 ──
+  const mainInput = document.getElementById('main-pw-input');
+  const mainErr   = document.getElementById('main-err-msg');
+  const mainBg    = document.getElementById('main-modal-bg');
+  const fileList  = document.getElementById('file-list');
+
+  setTimeout(() => mainInput.focus(), 80);
+
+  mainInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkMainPw(); });
+  mainInput.addEventListener('input', () => {
+    mainInput.classList.remove('error');
+    mainErr.textContent = '';
+    mainErr.style.color = '';
   });
 
-  input.addEventListener("input", () => {
-    input.classList.remove("error");
-    errMsg.textContent = "";
-    errMsg.style.color = "";
-  });
-
-  function checkPw() {
-    const val = input.value.trim();
-    if (val === PW) {
-      lockEmoji.textContent = "";
-      lockEmoji.classList.add("unlocked");
-      errMsg.style.color = "#0f6e56";
-      errMsg.textContent = "Open";
+  function checkMainPw() {
+    if (mainInput.value.trim() === MAIN_PW) {
+      mainErr.style.color = '#0f6e56';
+      mainErr.textContent = 'Open';
       setTimeout(() => {
-        modal.classList.add("open");
+        mainBg.classList.remove('open');
+        fileList.style.display = 'flex';
       }, 280);
     } else {
-      input.classList.add("error");
-      errMsg.style.color = "";
-      errMsg.textContent = "비밀번호 틀림";
-      input.select();
-      input.focus();
+      mainInput.classList.add('error');
+      mainErr.style.color = '';
+      mainErr.textContent = '비밀번호 틀림';
+      mainInput.select();
+      mainInput.focus();
+    }
+  }
+
+  // ── 서브 비번 ──
+  let targetUrl = '';
+  let targetKey = '';
+
+  const subBg   = document.getElementById('sub-modal-bg');
+  const pwInput = document.getElementById('pw-input');
+  const errMsg  = document.getElementById('err-msg');
+
+  function openLock(url, key) {
+    targetUrl = url;
+    targetKey = key;
+    pwInput.value = '';
+    pwInput.classList.remove('error');
+    errMsg.textContent = '';
+    errMsg.style.color = '';
+    subBg.classList.add('open');
+    setTimeout(() => pwInput.focus(), 80);
+  }
+
+  function checkPw() {
+    const val = pwInput.value.trim();
+    if (val === PASSWORDS[targetKey]) {
+      errMsg.style.color = '#0f6e56';
+      errMsg.textContent = 'Open';
+      setTimeout(() => location.href = targetUrl, 280);
+    } else {
+      pwInput.classList.add('error');
+      errMsg.style.color = '';
+      errMsg.textContent = '비밀번호 틀림';
+      pwInput.select();
+      pwInput.focus();
     }
   }
 
   function closeModal() {
-    modal.classList.remove("open");
+    subBg.classList.remove('open');
   }
 
   function onBgClick(e) {
-    if (e.target === modal) closeModal();
+    if (e.target === subBg) closeModal();
   }
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeModal();
+  pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
+  pwInput.addEventListener('input', () => {
+    pwInput.classList.remove('error');
+    errMsg.textContent = '';
+    errMsg.style.color = '';
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
   });
 </script>
 
