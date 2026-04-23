@@ -1060,19 +1060,18 @@ if (isAttackMove && anyBeedrillAlive(data)) {
           myPkmn.wishTurns = 2
           logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 희망사항을 빌었다!`))
           specialHandled = true
-        } else if (moveInfo?.healWish) {
-          myPkmn.hp = 0
-          logEntries.push(makeLog("faint",
-            `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }
-          ))
-          const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
-          if (canSwitch) {
-            data[`${mySlot}_healWish`] = true
-            logEntries.push(makeLog("normal",
-              `${myPkmn.name}${josa(myPkmn.name, "은는")} 동료에게 소원을 남겼다...`
-            ))
-          }
-          specialHandled = true
+       } else if (moveInfo?.healWish) {
+  myPkmn.hp = 0
+  logEntries.push(makeLog("faint", `${myPkmn.name}${josa(myPkmn.name, "은는")} 쓰러졌다!`, { slot: mySlot }))
+  const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
+  if (canSwitch) {
+    data[`${mySlot}_healWish`] = true
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 동료에게 소원을 남겼다...`))
+  }
+  const result = await finishTurn(roomRef, roomId, data, entries, logEntries, {
+    [`force_switch_${mySlot}`]: canSwitch ? true : false,
+  })
+  return res.status(200).json({ ok: true, ...(result ? { result } : {}) })
 
         } else if (moveInfo?.curse) {
           const isGhost = (Array.isArray(myPkmn.type) ? myPkmn.type : [myPkmn.type]).includes("고스트")
@@ -1235,28 +1234,31 @@ if (isAttackMove && anyBeedrillAlive(data)) {
     logEntries.push(makeLog("normal", `${bossName}${josa(bossName, "에게")} 씨앗이 심어졌다!`))
   }
   specialHandled = true
-        } else if (moveInfo?.healPulse) {
+         } else if (moveInfo?.healPulse) {
           const pulseTargets = tSlots.filter(s => PLAYER_SLOTS.includes(s))
-          if (pulseTargets.length === 0) pulseTargets.push(mySlot)
-          for (const ts of pulseTargets) {
-            const tIdx  = data[`${ts}_active_idx`] ?? 0
-            const tPkmn = entries[ts]?.[tIdx]
-            if (!tPkmn || tPkmn.hp <= 0) {
-              logEntries.push(makeLog("normal", "대상이 쓰러져 있다!"))
-              continue
-            }
-            if ((tPkmn.healBlocked ?? 0) > 0) {
-              logEntries.push(makeLog("normal",
-                `${tPkmn.name}${josa(tPkmn.name, "은는")} 회복이 봉인돼 있다!`
+          if (pulseTargets.length === 0) {
+            logEntries.push(makeLog("normal", "대상이 없다!"))
+          } else {
+            for (const ts of pulseTargets) {
+              const tIdx  = data[`${ts}_active_idx`] ?? 0
+              const tPkmn = entries[ts]?.[tIdx]
+              if (!tPkmn || tPkmn.hp <= 0) {
+                logEntries.push(makeLog("normal", "대상이 쓰러져 있다!"))
+                continue
+              }
+              if ((tPkmn.healBlocked ?? 0) > 0) {
+                logEntries.push(makeLog("normal",
+                  `${tPkmn.name}${josa(tPkmn.name, "은는")} 회복이 봉인돼 있다!`
+                ))
+                continue
+              }
+              const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.5))
+              tPkmn.hp   = Math.min(tPkmn.maxHp ?? tPkmn.hp, tPkmn.hp + heal)
+              logEntries.push(makeLog("hp",
+                `${tPkmn.name}${josa(tPkmn.name, "은는")} 치유파동으로 HP를 회복했다! (+${heal})`,
+                { slot: ts, hp: tPkmn.hp, maxHp: tPkmn.maxHp }
               ))
-              continue
             }
-            const heal = Math.max(1, Math.floor((tPkmn.maxHp ?? tPkmn.hp) * 0.5))
-            tPkmn.hp   = Math.min(tPkmn.maxHp ?? tPkmn.hp, tPkmn.hp + heal)
-            logEntries.push(makeLog("hp",
-              `${tPkmn.name}${josa(tPkmn.name, "은는")} 치유파동으로 HP를 회복했다! (+${heal})`,
-              { slot: ts, hp: tPkmn.hp, maxHp: tPkmn.maxHp }
-            ))
           }
           specialHandled = true
         } else if (moveInfo?.splash) {

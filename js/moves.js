@@ -83,7 +83,7 @@ export const moves = {
   "불꽃세례":       { power: 30, type: "불", accuracy: 100, alwaysHit: false, effect: { chance: 0.1, status: "화상", thawEnemy: true } },
   "도깨비불":       { power: 0,  type: "불", accuracy: 85,  alwaysHit: false, targetSelf: false, effect: { chance: 1, status: "화상" } },
   "열풍":           { power: 50, type: "불", accuracy: 90, alwaysHit: false, effect: { chance: 0.1, status: "화상" }, aoeEnemy: true },
-  "불대문자":       { power: 40, type: "불", accuracy: 85,  alwaysHit: false, effect: null },
+  "불대문자":       { power: 60, type: "불",     accuracy: 85,  alwaysHit: false, effect: { chance: 0.1, status: "화상" } },
   "매지컬플레임":   { power: 45, type: "불", accuracy: 100, alwaysHit: false, effect: null,
                       rank: { targetAtk: -1, turns: 2 } },
   "불꽃튀기기":     { power: 40, type: "불", accuracy: 100, alwaysHit: false, effect: null, sparks: true  },
@@ -161,6 +161,7 @@ export const moves = {
   "우드혼":         { power: 45, type: "풀", accuracy: 100, alwaysHit: false, effect: { drain: 0.15 } },
   "사과산":         { power: 50, type: "풀", accuracy: 100, alwaysHit: false, effect: null,
                       rank: { targetDef: -1, turns: 2 } },
+"꽃보라":   { power: 50, type: "풀", accuracy: 100, alwaysHit: false, effect: null, aoe: true },
 
   // ───── 얼음 ─────
   "눈보라":         { power: 40, type: "얼음", accuracy: 70,  alwaysHit: false, effect: { chance: 0.1, status: "얼음" }, aoeEnemy: true },
@@ -286,6 +287,8 @@ export const moves = {
                   rank: { atk: 1, def: 1, spd: 1, turns: 3 } },
   "벌레의야단법석":{ power: 50, type: "벌레", accuracy: 100, alwaysHit: false, effect: null,
                     targetSelf: false, rank: { chance: 0.1, targetDef: 1, turns: 2 } },
+"엄습하는일격":{ power: 40, type: "벌레", accuracy: 90, alwaysHit: false, effect: null,
+                    targetSelf: false, rank: { targetAtk: 1, turns: 2 } },
   "시저크로스": { power: 50, type: "벌레", accuracy: 100, alwaysHit: false,  effect: null },
 
   // ───── 고스트 ─────
@@ -439,7 +442,7 @@ export const moves = {
 "코칭":       { power: 0,  type: "격투", accuracy: 100, alwaysHit: true,
                 effect: null, teamBoost: true,
                 rank: { targetAtk: 1, targetDef: 1, turns: 2 } },
-                
+
 "폭풍":       { power: 60, type: "비행", accuracy: 70, alwaysHit: false,
                 effect: { chance: 0.3, volatile: "혼란" }, weatherAccuracy: true },
 
@@ -447,5 +450,7 @@ export const moves = {
                 effect: null, solarBlade: true },
 
 "알낳기":     { power: 0,  type: "노말", accuracy: 100, alwaysHit: true,
+                effect: { heal: 0.22 }, targetSelf: true, eggHeal: true },
+"우유마시기":     { power: 0,  type: "노말", accuracy: 100, alwaysHit: true,
                 effect: { heal: 0.22 }, targetSelf: true, eggHeal: true },
 }

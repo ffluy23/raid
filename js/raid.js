@@ -725,6 +725,36 @@ function updateMoveButtons(data) {
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
 
+   // ── 치유파동: 아군 선택 팝업 ──
+  if (moveInfo?.healPulse) {
+    const aliveAllies = otherPlayerSlots().filter(s => {
+      const aIdx = data[`${s}_active_idx`] ?? 0
+      const p    = data[`${s}_entry`]?.[aIdx]
+      return p && p.hp > 0
+    })
+    if (aliveAllies.length === 0) {
+      doUseMove(idx, [], data)
+      return
+    }
+    const popup     = $("ally-target-popup")
+    const btnWrap   = $("ally-target-buttons")
+    const cancelBtn = $("ally-target-cancel")
+    if (!popup || !btnWrap) { doUseMove(idx, [], data); return }
+    btnWrap.innerHTML = ""
+    aliveAllies.forEach(s => {
+      const aIdx = data[`${s}_active_idx`] ?? 0
+      const p    = data[`${s}_entry`]?.[aIdx]
+      const btn  = document.createElement("button")
+      btn.textContent = p?.name ?? s
+      btn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #27ae60;background:#27ae60;color:#fff;cursor:pointer;font-size:11px;"
+      btn.onclick = () => { popup.style.display = "none"; doUseMove(idx, [s], data) }
+      btnWrap.appendChild(btn)
+    })
+    cancelBtn.onclick = () => { popup.style.display = "none" }
+    popup.style.display = "block"
+    return
+  }
+
   // ── 꽃가루경단: 아군 선택 팝업 먼저 ──
   if (moveInfo?.pollenPuff) {
     const aliveAllies = otherPlayerSlots().filter(s => {
@@ -832,12 +862,12 @@ function onMoveClick(idx, moveInfo, data) {
 
  const r = moveInfo?.rank
 const targetsEnemy =
-  !moveInfo?.teamBoost &&  // ← 추가
+  !moveInfo?.teamBoost &&
   (moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
   || moveInfo?.taunt || moveInfo?.memento
   || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
   || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
-  || moveInfo?.dragonTail || moveInfo?.healPulse || moveInfo?.poisonPowder
+  || moveInfo?.dragonTail || moveInfo?.poisonPowder
   || moveInfo?.pollenPuff || moveInfo?.curse
   || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
   || (moveInfo?.effect?.status && moveInfo?.targetSelf === false))
