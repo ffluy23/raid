@@ -667,10 +667,7 @@ async function handleRaidEot(roomRef, roomId, data, entries, update, logEntries)
         eotLogs.push(makeLog("normal", `${pkmn.name}${josa(pkmn.name, "의")} 비행타입이 돌아왔다!`))
       }
     }
-  if ((pkmn.defendTurns ?? 0) > 0) {
-      pkmn.defendTurns--
-      if (!pkmn.defendTurns) pkmn.defending = false
-    }
+ 
     pkmn.tookDamageLastTurn = false
     if (pkmn.status === "독" || pkmn.status === "화상") {
       const dmg = Math.max(1, Math.floor((pkmn.maxHp ?? pkmn.hp) / 64))
