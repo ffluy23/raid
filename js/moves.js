@@ -428,8 +428,8 @@ rank: { targetAtk: -2, turns: 2 } },
                 effect: null, field: "toxic_spikes", targetSelf: false, aoeEnemy: true },
 
   // ───── 특수 기술 ─────
-  "방어":       { power: 0,  type: "노말", accuracy: 100, alwaysHit: true,  effect: null, defend: true, targetSelf: true },
-  "판별":       { power: 0,  type: "격투", accuracy: 100, alwaysHit: true,  effect: null, defend: true, targetSelf: true },
+  "방어": { power: 0, type: "노말", accuracy: 100, alwaysHit: true, effect: null, defend: true, targetSelf: true, consecutiveCheck: true },
+"판별": { power: 0, type: "격투", accuracy: 100, alwaysHit: true, effect: null, defend: true, targetSelf: true, consecutiveCheck: true },
   "울부짖기":   { power: 0,  type: "노말", accuracy: 100, alwaysHit: false, effect: null, roar: true, targetSelf: false },
   "원수갚기":   { power: 40, type: "노말", accuracy: 100, alwaysHit: false, effect: null, revenge: true },
   "뒀다쓰기":   { power: 70, type: "노말", accuracy: 100, alwaysHit: false, effect: null, lastResort: true },
