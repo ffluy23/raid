@@ -71,13 +71,11 @@ body::before {
   transform: translateY(1px);
 }
 
-/* 잠긴 버튼 */
 .menu-btn.locked::before {
   content: "🔒 ";
   opacity: 0.6;
 }
 
-/* ── 모달 ── */
 .modal-bg {
   position: fixed;
   inset: 0;
@@ -185,7 +183,6 @@ body::after {
   pointer-events: none;
 }
 
-/* ── 모바일 ── */
 @media (max-width: 480px) {
   body::before { font-size: 12px; }
 
@@ -211,30 +208,17 @@ body::after {
 </head>
 <body>
 
-  <!-- 메인 비번 모달 (초기 진입) -->
-  <div class="modal-bg open" id="main-modal-bg">
-    <div class="modal">
-      <div class="modal-title">잠금 처리된 문서</div>
-      <div class="modal-sub">비밀번호를 입력</div>
-      <div class="input-row">
-        <input type="text" id="main-pw-input" placeholder="Password" autocomplete="off" />
-        <button class="confirm-btn" onclick="checkMainPw()">Enter</button>
-      </div>
-      <div class="err-msg" id="main-err-msg"></div>
-    </div>
-  </div>
-
-  <!-- 파일 목록 (메인 비번 통과 후 표시) -->
-  <div id="file-list" style="display:none; flex-direction:column; align-items:center;">
+  <!-- 파일 목록 -->
+  <div style="display:flex; flex-direction:column; align-items:center;">
     <button class="menu-btn" onclick="location.href='pages/raidroom1.html'">기밀 자료1</button>
     <button class="menu-btn locked" onclick="openLock('pages/raidroom2.html', '2')">기밀 자료2</button>
     <button class="menu-btn locked" onclick="openLock('pages/raidroom3.html', '3')">기밀 자료3</button>
   </div>
 
-  <!-- 서브 비번 모달 (기밀 2, 3용) -->
+  <!-- 서브 비번 모달 -->
   <div class="modal-bg" id="sub-modal-bg" onclick="onBgClick(event)">
-    <div class="modal" id="sub-modal">
-      <div class="modal-title" id="modal-title">잠금 처리된 문서</div>
+    <div class="modal">
+      <div class="modal-title">잠금 처리된 문서</div>
       <div class="modal-sub">비밀번호를 입력</div>
       <div class="input-row">
         <input type="text" id="pw-input" placeholder="Password" autocomplete="off" />
@@ -245,45 +229,11 @@ body::after {
   </div>
 
 <script>
-  const MAIN_PW = "메리프의전기저항과보송함의상관관계";
   const PASSWORDS = {
     '2': '보송송의매력은어디까지인가',
     '3': '전룡이되기전그순간을영원히기억해',
   };
 
-  // ── 메인 비번 ──
-  const mainInput = document.getElementById('main-pw-input');
-  const mainErr   = document.getElementById('main-err-msg');
-  const mainBg    = document.getElementById('main-modal-bg');
-  const fileList  = document.getElementById('file-list');
-
-  setTimeout(() => mainInput.focus(), 80);
-
-  mainInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkMainPw(); });
-  mainInput.addEventListener('input', () => {
-    mainInput.classList.remove('error');
-    mainErr.textContent = '';
-    mainErr.style.color = '';
-  });
-
-  function checkMainPw() {
-    if (mainInput.value.trim() === MAIN_PW) {
-      mainErr.style.color = '#0f6e56';
-      mainErr.textContent = 'Open';
-      setTimeout(() => {
-        mainBg.classList.remove('open');
-        fileList.style.display = 'flex';
-      }, 280);
-    } else {
-      mainInput.classList.add('error');
-      mainErr.style.color = '';
-      mainErr.textContent = '비밀번호 틀림';
-      mainInput.select();
-      mainInput.focus();
-    }
-  }
-
-  // ── 서브 비번 ──
   let targetUrl = '';
   let targetKey = '';
 
