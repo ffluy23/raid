@@ -54,7 +54,6 @@ const RAID_BG = "https://urgent-amethyst-ykrwrgxwfi.edgeone.app/%EB%A0%88%EC%9D%
 
 function applyBossPortrait(portraitUrl) {
   if (!portraitUrl) return
-  // 보스 초상화 적용
   const img = document.getElementById("boss-portrait")
   if (img) {
     img.src = portraitUrl
@@ -63,7 +62,6 @@ function applyBossPortrait(portraitUrl) {
     const ph = img.previousElementSibling
     if (ph) ph.style.display = "none"
   }
-  // 배경은 고정 이미지
   if (!bgApplied) {
     document.body.style.backgroundImage = `url('${RAID_BG}')`
     document.body.style.backgroundSize = "cover"
@@ -129,9 +127,14 @@ async function onTouched() {
   if (bossData?.bgm) startBgm(bossData.bgm)
 
   // 보스 초상화 + 배경
+  // p1만 방 문서 초기화 담당
   if (bossData?.portrait) {
     if (mySlot === "p1") {
-      await updateDoc(roomRef, { boss_portrait_url: bossData.portrait })
+      const introUpdate = { boss_portrait_url: bossData.portrait }
+      // boss/kangaskhan 문서에 baby 필드가 있으면 raid 방 문서에도 세팅
+      // (아기 캥카가 처음부터 UI에 표시되려면 boss_baby가 방 문서에 있어야 함)
+      if (bossData.baby) introUpdate.boss_baby = bossData.baby
+      await updateDoc(roomRef, introUpdate)
     }
     applyBossPortrait(bossData.portrait)
   }
@@ -140,7 +143,6 @@ async function onTouched() {
   if (mySlot) {
     await updateDoc(roomRef, { [`intro_ready_${mySlot}`]: true })
   } else {
-    // 슬롯을 못 찾은 경우 (관전자 or 문서 불일치) → 바로 배틀 화면으로
     await skipIntro()
     return
   }
@@ -155,7 +157,6 @@ function listenReady() {
     const room = snap.data()
     if (!room) return
 
-    // 배경 늦게 수신
     if (room.boss_portrait_url && !bgApplied) {
       applyBossPortrait(room.boss_portrait_url)
     }
@@ -163,7 +164,6 @@ function listenReady() {
     const readyCount = PLAYER_SLOTS.filter(s => room[`intro_ready_${s}`]).length
     const allReady   = readyCount >= PLAYER_SLOTS.length
 
-    // 대기 메시지 업데이트
     if (touched) {
       const prompt = document.getElementById("touch-prompt")
       if (prompt && !allReady) prompt.textContent = `대기 중... (${readyCount}/${PLAYER_SLOTS.length})`
@@ -181,7 +181,6 @@ async function startBattle(room) {
   const battleScreen = document.getElementById("battle-screen")
   if (battleScreen) battleScreen.style.opacity = "1"
 
-  // p1만 game_started_at, intro_done 기록
   if (mySlot === "p1") {
     await updateDoc(roomRef, {
       game_started_at: Date.now(),
@@ -213,7 +212,6 @@ async function skipIntro() {
   if (battleScreen) battleScreen.style.opacity = "1"
   initVolumeSlider()
 
-  // 보스 데이터 복원
   const snap     = await getDoc(roomRef)
   const room     = snap.data()
   const bossId   = room?.boss_id   ?? null
