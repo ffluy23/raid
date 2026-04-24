@@ -923,8 +923,15 @@ function onMoveClick(idx, moveInfo, data) {
       pendingMoveIdx = idx; pendingMoveInfo = moveInfo
       enterBeedrillTargetMode(data)
     }
-  } else {
-    doUseMove(idx, ["boss"], data)
+ } else {
+    // 아기 캥카 있으면 팝업, 없으면 보스 직빵
+    const hasBaby   = !!(data.boss_baby && (data.boss_baby.hp ?? 0) > 0)
+    const bossPhase = data.boss_state?.phase ?? 1
+    if (hasBaby && bossPhase === 1) {
+      showBossTargetPopup(idx, moveInfo, data)
+    } else {
+      doUseMove(idx, ["boss"], data)
+    }
   }
   return
 }
