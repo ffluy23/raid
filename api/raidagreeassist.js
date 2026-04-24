@@ -42,7 +42,12 @@ export default async function handler(req, res) {
   const newAgrees = [...(req_.agrees ?? []), mySlot]
 
   // 나 제외 나머지 플레이어 수 (신청자 포함 동의가 필요한 인원)
-  const othersCount = PLAYER_SLOTS.filter(s => s !== req_.from).length  // 2명
+ const othersCount = PLAYER_SLOTS.filter(s => {
+  if (s === req_.from) return false
+  const idx  = data[`${s}_active_idx`] ?? 0
+  const pkmn = data[`${s}_entry`]?.[idx]
+  return pkmn && pkmn.hp > 0  // 살아있는 플레이어만 카운트
+}).length  // 2명
   const activated   = newAgrees.length >= othersCount  // 2명 다 동의하면 발동
 
   if (activated) {
@@ -53,7 +58,7 @@ export default async function handler(req, res) {
       assist_used:         false,
     })
     await writeLogs(roomId, [
-      `🤝 어시스트 발동! ${req_.fromName}${josa(req_.fromName, "이가")} 전투에서 강해진다!`
+      `🤝 어시스트 발동! ${req_.fromName}${josa(req_.fromName, "이가")} 전투에서 강해진다! 믿을게!`
     ])
   } else {
     await roomRef.update({ assist_request: { ...req_, agrees: newAgrees } })

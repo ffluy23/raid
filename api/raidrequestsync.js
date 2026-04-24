@@ -31,11 +31,9 @@ export default async function handler(req, res) {
 
   // 동의할 아군이 있는지
   const others = PLAYER_SLOTS.filter(s => s !== mySlot)
-  const anyAllyAlive = others.some(s => {
-    const idx  = data[`${s}_active_idx`] ?? 0
-    const pkmn = data[`${s}_entry`]?.[idx]
-    return pkmn && pkmn.hp > 0
-  })
+ const anyAllyAlive = others.some(s =>
+  (data[`${s}_entry`] ?? []).some(p => p.hp > 0)
+)
   if (!anyAllyAlive) return res.status(403).json({ error: "동의할 수 있는 아군이 없음" })
 
   const myName = data[`${mySlot.replace("p", "player")}_name`] ?? mySlot

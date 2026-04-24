@@ -41,7 +41,12 @@ export default async function handler(req, res) {
   const myName    = data[`${mySlot.replace("p", "player")}_name`] ?? mySlot
   const newAgrees = [...(req_.agrees ?? []), mySlot]
 
-  const othersCount = PLAYER_SLOTS.filter(s => s !== req_.from).length  // 2명
+ const othersCount = PLAYER_SLOTS.filter(s => {
+  if (s === req_.from) return false
+  const idx  = data[`${s}_active_idx`] ?? 0
+  const pkmn = data[`${s}_entry`]?.[idx]
+  return pkmn && pkmn.hp > 0
+}).length
   const activated   = newAgrees.length >= othersCount
 
   if (activated) {
@@ -52,12 +57,12 @@ export default async function handler(req, res) {
       sync_used:    false,
     })
     await writeLogs(roomId, [
-      `💠 싱크로나이즈 발동! 보스의 다음 공격을 3명이 함께 받는다!`
+      `💠 싱크로나이즈 발동! `
     ])
   } else {
     await roomRef.update({ sync_request: { ...req_, agrees: newAgrees } })
     await writeLogs(roomId, [
-      `${myName}${josa(myName, "이가")} 싱크로에 동의했다! (${newAgrees.length}/${othersCount})`
+      `${myName}${josa(myName, "이가")} 싱크로에 동의했다! 연결 유지, 끊지 마!(${newAgrees.length}/${othersCount})`
     ])
   }
 
