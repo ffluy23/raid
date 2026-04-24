@@ -911,6 +911,22 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
+  if (moveInfo?.uTurn) {
+  if (hasBeedrills) {
+    const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
+    if (aliveBees.length === 1) {
+      const bIdx = (data.Beedrill ?? []).findIndex(b => b.hp > 0)
+      doUseMove(idx, [`beedrill_${bIdx}`], data)
+    } else {
+      pendingMoveIdx = idx; pendingMoveInfo = moveInfo
+      enterBeedrillTargetMode(data)
+    }
+  } else {
+    doUseMove(idx, ["boss"], data)
+  }
+  return
+}
+
   const hasBeedrills = anyBeedrillAlive(data)
 
   // aoe 기술
@@ -930,17 +946,22 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
-  const r = moveInfo?.rank
-  const targetsEnemy =
-    !moveInfo?.teamBoost &&
-    (moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
-    || moveInfo?.taunt || moveInfo?.memento
-    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
-    || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
-    || moveInfo?.dragonTail || moveInfo?.poisonPowder
-    || moveInfo?.pollenPuff || moveInfo?.curse
-    || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
-    || (moveInfo?.effect?.status && moveInfo?.targetSelf === false))
+ const r = moveInfo?.rank
+const targetsEnemy =
+  !moveInfo?.teamBoost &&
+  !moveInfo?.healPulse &&
+  !moveInfo?.eggHeal &&
+  !moveInfo?.waterHeal &&
+  !moveInfo?.helper &&
+  !moveInfo?.pollenPuff &&
+  (moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
+  || moveInfo?.taunt || moveInfo?.memento
+  || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
+  || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
+  || moveInfo?.dragonTail || moveInfo?.poisonPowder
+  || moveInfo?.curse
+  || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
+  || (moveInfo?.effect?.status && moveInfo?.targetSelf === false))
 
   if (!targetsEnemy) {
     doUseMove(idx, [], data)
@@ -975,35 +996,50 @@ function onMoveClick(idx, moveInfo, data) {
 
 // ── 보스 타겟 선택 팝업 (엄마/아기 캥카 선택) ────────────────────────
 function showBossTargetPopup(idx, moveInfo, data) {
-  const popup     = $("ally-target-popup")
-  const btnWrap   = $("ally-target-buttons")
-  const cancelBtn = $("ally-target-cancel")
-  if (!popup || !btnWrap) { doUseMove(idx, ["boss"], data); return }
+  const existing = document.getElementById('boss-target-popup')
+  if (existing) existing.remove()
 
-  btnWrap.innerHTML = ""
+  const popup = document.createElement('div')
+  popup.id = 'boss-target-popup'
+  popup.style.cssText = `
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9000;
+    background: #fff; border: 2px solid #e74c3c;
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 12px; color: #333;
+    display: flex; flex-direction: column; gap: 10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    min-width: 200px;
+  `
+  const label = document.createElement('div')
+  label.textContent = '⚔ 공격 대상을 선택하세요'
+  label.style.cssText = 'font-weight:bold; color:#e74c3c;'
+  popup.appendChild(label)
 
-  // 엄마 캥카 버튼
-  const momBtn = document.createElement("button")
-  momBtn.textContent = data.boss_name ?? "엄마 캥카"
-  momBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #e74c3c;background:#e74c3c;color:#fff;cursor:pointer;font-size:11px;"
-  momBtn.onclick = () => { popup.style.display = "none"; doUseMove(idx, ["boss"], data) }
+  const btnWrap = document.createElement('div')
+  btnWrap.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap;'
+
+  const momBtn = document.createElement('button')
+  momBtn.textContent = data.boss_name ?? '엄마 캥카'
+  momBtn.style.cssText = 'flex:1; padding:7px 12px; border-radius:8px; border:none; background:#e74c3c; color:#fff; cursor:pointer; font-size:12px; font-weight:bold;'
+  momBtn.onclick = () => { popup.remove(); doUseMove(idx, ['boss'], data) }
+
+  const babyBtn = document.createElement('button')
+  babyBtn.textContent = data.boss_baby?.name ?? '아기 캥카'
+  babyBtn.style.cssText = 'flex:1; padding:7px 12px; border-radius:8px; border:none; background:#e67e22; color:#fff; cursor:pointer; font-size:12px; font-weight:bold;'
+  babyBtn.onclick = () => { popup.remove(); doUseMove(idx, ['boss_baby'], data) }
+
+  const cancelBtn = document.createElement('button')
+  cancelBtn.textContent = '취소'
+  cancelBtn.style.cssText = 'width:100%; padding:5px; border-radius:8px; border:1px solid #ccc; background:transparent; color:#888; cursor:pointer; font-size:11px;'
+  cancelBtn.onclick = () => popup.remove()
+
   btnWrap.appendChild(momBtn)
-
-  // 아기 캥카 버튼
-  const babyBtn = document.createElement("button")
-  babyBtn.textContent = data.boss_baby?.name ?? "아기 캥카"
-  babyBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #e67e22;background:#e67e22;color:#fff;cursor:pointer;font-size:11px;"
-  babyBtn.onclick = () => { popup.style.display = "none"; doUseMove(idx, ["boss_baby"], data) }
   btnWrap.appendChild(babyBtn)
-
-  cancelBtn.onclick = () => { popup.style.display = "none" }
-
-  // 팝업 라벨 임시 변경
-  const popupEl = popup.querySelector("div:first-child")
-  if (popupEl) popupEl.textContent = "⚔ 공격 대상을 선택하세요"
-  popup.style.borderColor = "#e74c3c"
-  popup.style.color = "#e74c3c"
-  popup.style.display = "block"
+  popup.appendChild(btnWrap)
+  popup.appendChild(cancelBtn)
+  document.body.appendChild(popup)
 }
 
 async function doUseMove(moveIdx, targetSlots, data) {
