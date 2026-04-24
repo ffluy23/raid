@@ -473,37 +473,37 @@ function handleTwoTurnAttack(myPkmn, mySlot, targetSlot, entries, data, logEntri
     const tIdx  = data[`${targetSlot}_active_idx`] ?? 0
     const tPkmn = entries[targetSlot]?.[tIdx]
     if (!tPkmn || tPkmn.hp <= 0) { logEntries.push(makeLog("normal", "상대가 이미 쓰러졌다!")); return }
-    const { hit, hitType } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, tPkmn)
-    if (!hit) { logEntries.push(makeLog("normal", hitType === "evaded" ? `${tPkmn.name}에게는 맞지 않았다!` : "빗나갔다!")); return }
-    const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, tPkmn)
-    if (multiplier === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return }
-    applyDamagesToPlayers({ [targetSlot]: damage }, entries, data, logEntries)
+    const { hit } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, tPkmn)
+    if (!hit) { logEntries.push(makeLog("normal", "빗나갔다!")); return }
+    const { damage: dmg1, multiplier: mult1, critical: crit1 } = calcDamage(myPkmn, moveName, tPkmn)
+    if (mult1 === 0) { logEntries.push(makeLog("normal", `${tPkmn.name}에게는 효과가 없다…`)); return }
+    applyDamagesToPlayers({ [targetSlot]: dmg1 }, entries, data, logEntries)
   } else {
     if (isBeedrillSlot(targetSlot)) {
       const bee = getBeedrill(data, targetSlot)
       if (!bee || bee.hp <= 0) { logEntries.push(makeLog("normal", "독침붕은 이미 쓰러졌다!")); return }
-      const { hit, hitType } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, { type: bee.type, speed: bee.speed ?? 3, ranks: bee.ranks ?? defaultRanks() })
+      const { hit } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, { type: bee.type, speed: bee.speed ?? 3, ranks: bee.ranks ?? defaultRanks() })
       if (!hit) { logEntries.push(makeLog("normal", "빗나갔다!")); return }
-      const { damage, multiplier, critical } = calcDamageToBeedrill(myPkmn, moveName, bee)
-      if (multiplier === 0) { logEntries.push(makeLog("normal", `독침붕에게는 효과가 없다…`)); return }
-      applyDamageToBeedrill(data, targetSlot, damage, logEntries)
-      if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
-      if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
-      if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+      const { damage: dmg2, multiplier: mult2, critical: crit2 } = calcDamageToBeedrill(myPkmn, moveName, bee)
+      if (mult2 === 0) { logEntries.push(makeLog("normal", `독침붕에게는 효과가 없다…`)); return }
+      applyDamageToBeedrill(data, targetSlot, dmg2, logEntries)
+      if (mult2 > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+      if (mult2 < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
+      if (crit2)     logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
     } else {
-      const { hit, hitType } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, { type: data.boss_type ?? "노말" })
+      const { hit } = calcHit(myPkmn, { accuracy: accuracy ?? 95 }, { type: data.boss_type ?? "노말" })
       if (!hit) { logEntries.push(makeLog("normal", "빗나갔다!")); return }
       const fakeBoss = makeFakeBoss(data)
-      const { damage, multiplier, critical } = calcDamage(myPkmn, moveName, fakeBoss)
+      const { damage: dmg3, multiplier: mult3, critical: crit3 } = calcDamage(myPkmn, moveName, fakeBoss)
       const bossName = data.boss_name ?? "보스"
-      if (multiplier === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return }
-      const finalDmg = Math.max(1, damage)
+      if (mult3 === 0) { logEntries.push(makeLog("normal", `${bossName}에게는 효과가 없다…`)); return }
+      const finalDmg = Math.max(1, dmg3)
       data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - finalDmg)
       logEntries.push(makeLog("hit", "", { defender: "boss" }))
       logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
-      if (multiplier > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
-      if (multiplier < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
-      if (critical)       logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
+      if (mult3 > 1) logEntries.push(makeLog("after_hit", "효과가 굉장했다!"))
+      if (mult3 < 1) logEntries.push(makeLog("after_hit", "효과가 별로인 듯하다…"))
+      if (crit3)     logEntries.push(makeLog("after_hit", "급소에 맞았다!"))
       if (data.boss_current_hp <= 0) logEntries.push(makeLog("faint", `${bossName}${josa(bossName, "은는")} 쓰러졌다!`, { slot: "boss" }))
       trackDealCheck(data, mySlot ?? "p1", finalDmg)
     }
