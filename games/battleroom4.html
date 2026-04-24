@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raid Battle</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+@import url('https://cdn.jsdelivr.net/gh/MonadABXY/mona-font/web/mona.css');
+
+/* ══ 인트로 오버레이 ══ */
+#intro-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: #000; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.8s ease;
+}
+#intro-overlay.fade-out { opacity: 0; pointer-events: none; }
+#intro-overlay.hidden   { display: none; }
+
+#touch-prompt {
+  color: #fff; font-size: clamp(1rem,4vw,1.6rem);
+  letter-spacing: 0.2em;
+  animation: blink 1.4s ease-in-out infinite;
+  cursor: pointer;
+}
+@keyframes blink { 0%,100%{opacity:.2} 50%{opacity:1} }
+
+body {
+  background-color: #1a1a2e;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  transition: background-image 0.5s ease;
+  padding: 0; min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Mona12', sans-serif;
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+
+.battle {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+}
+
+#battle-wrapper {
+  background-color: #fff;
+  width: 930px; max-width: 99vw;
+  padding: 16px; box-sizing: border-box;
+  border: 1px solid #444; border-radius: 12px;
+}
+
+#battle-screen {
+  display: flex; flex-direction: column; gap: 10px;
+  opacity: 0; transition: opacity 0.8s ease;
+}
+
+#battle-top { display: flex; flex-direction: column; gap: 14px; }
+
+/* ══ 보스 행
+   [ 엄마img | 아기img(opt) ]  [ 엄마HP카드 ]
+                               [ 아기HP카드 ]
+══ */
+#boss-row { display: flex; flex-direction: column; gap: 8px; }
+
+#boss-row-inner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+/* 포트레이트 묶음 */
+#boss-portraits {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+/* 포트레이트 래퍼 공통 */
+.boss-portrait-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+/* 엄마 포트레이트 */
+.boss-portrait-wrap {
+  width: 140px; height: 140px;
+  position: relative; flex-shrink: 0;
+}
+.boss-portrait-placeholder {
+  position: absolute; inset: 0;
+  background: #282B42; border-radius: 8px;
+}
+.boss-portrait-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; border-radius: 8px;
+  display: none; opacity: 0; transition: opacity .35s;
+}
+.boss-portrait-img.visible { display: block; opacity: 1; }
+
+/* 아기 포트레이트 (기본 숨김) */
+#baby-portrait-block { display: none; }
+#boss-row.has-baby #baby-portrait-block { display: flex; }
+
+.baby-portrait-wrap {
+  width: 88px; height: 88px;
+  position: relative; flex-shrink: 0;
+}
+.baby-portrait-placeholder {
+  position: absolute; inset: 0;
+  background: #2d2318; border-radius: 8px;
+}
+.baby-portrait-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; border-radius: 8px;
+  display: none; opacity: 0; transition: opacity .35s;
+}
+.baby-portrait-img.visible { display: block; opacity: 1; }
+
+/* HP 묶음 */
+#boss-hp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 엄마 HP 카드 */
+.boss-hp-card {
+  width: 100%; padding: 8px 12px 9px; box-sizing: border-box;
+  border: 2px solid #e74c3c; border-radius: 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(231,76,60,0.04);
+}
+.boss-hp-card-top { display: flex; justify-content: space-between; align-items: center; }
+.boss-name-label  { font-size: 13px; font-weight: bold; color: #c0392b; }
+.boss-hp-number   { font-size: 11px; color: #555; }
+.boss-status-tag  { font-size: 10px; color: #e74c3c; min-height: 14px; }
+.boss-rank-tag    { font-size: 10px; color: #888;   min-height: 14px; }
+
+/* 아기 HP 카드 (기본 숨김) */
+.baby-hp-card {
+  width: 100%; padding: 6px 12px 7px; box-sizing: border-box;
+  border: 2px solid #e67e22; border-radius: 12px;
+  display: none; flex-direction: column; gap: 3px;
+  background: rgba(230,126,34,0.05);
+}
+#boss-row.has-baby .baby-hp-card { display: flex; }
+.baby-hp-card.fainted {
+  border-color: #aaa; background: rgba(0,0,0,0.04); opacity: 0.5;
+}
+.baby-hp-card-top { display: flex; justify-content: space-between; align-items: center; }
+.baby-name-label  { font-size: 12px; font-weight: bold; color: #c0671a; }
+.baby-hp-number   { font-size: 10px; color: #555; }
+
+/* HP바 공통 */
+.hp-bar-wrap {
+  width: 100%; background: rgba(0,0,0,0.12);
+  border-radius: 999px; height: 7px; overflow: hidden;
+}
+.baby-hp-bar-wrap {
+  width: 100%; background: rgba(0,0,0,0.12);
+  border-radius: 999px; height: 6px; overflow: hidden;
+}
+.hp-bar {
+  height: 100%; width: 100%; background: #e74c3c;
+  border-radius: 999px; transition: width .5s, background-color .4s;
+}
+.baby-hp-bar {
+  height: 100%; width: 100%; background: #e67e22;
+  border-radius: 999px; transition: width .5s, background-color .4s;
+}
+
+.boss-label {
+  font-size: 10px; color: #e74c3c; font-weight: bold;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.baby-label {
+  font-size: 10px; color: #e67e22; font-weight: bold;
+  letter-spacing: 0.08em;
+}
+
+/* ── 플레이어 + 가운데 ── */
+#player-row {
+  display: grid;
+  grid-template-columns: 2fr 140px;
+  gap: 10px;
+  align-items: start;
+}
+
+#player-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.pkmn-col { display: flex; flex-direction: column; gap: 6px; }
+
+#center-col {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 8px;
+}
+#turn-area { text-align: center; width: 100%; }
+#turn-display { font-size: 14px; font-weight: bold; color: #333; }
+#turn-count   { font-size: 11px; color: #888; margin-top: 2px; }
+
+#order-display { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+.order-item {
+  font-size: 10px; color: #aaa;
+  padding: 2px 6px; border-radius: 8px;
+  text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.order-item.active { background: #4caf50; color: #fff; font-weight: bold; }
+.order-item.mine   { border: 1px solid #4caf50; color: #4caf50; }
+.order-item.boss   { background: #e74c3c; color: #fff; font-weight: bold; }
+
+#dice-wrap {
+  display: none; flex-direction: column;
+  align-items: center; gap: 5px; width: 100%;
+}
+.dice-row { display: flex; gap: 10px; justify-content: center; }
+.dice-box { text-align: center; }
+.dice-box span { display: block; font-size: 9px; color: #888; margin-bottom: 1px; }
+.dice-num {
+  font-size: 28px; font-weight: bold;
+  color: #e63946; min-width: 32px; text-align: center;
+}
+.pop { animation: pop .1s ease-out; }
+@keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.4)} 100%{transform:scale(1)} }
+
+.hp-card {
+  width: 100%; padding: 6px 12px 7px; box-sizing: border-box;
+  border: 1.5px solid #555; border-radius: 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(0,0,0,0.03);
+}
+.hp-card.my-card    { border-color: #4caf50; }
+.hp-card.ally1-card { border-color: #5185c5; }
+.hp-card.ally2-card { border-color: #9b59b6; }
+.hp-card-top { display: flex; justify-content: space-between; align-items: center; }
+.hp-card-name   { font-size: 11px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58%; }
+.hp-card-number { font-size: 10px; color: #555; white-space: nowrap; }
+
+.portrait-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+.portrait-placeholder { position: absolute; inset: 0; background: #282B42; border-radius: 5px; }
+.portrait-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; border-radius: 5px;
+  display: none; opacity: 0; transition: opacity .35s;
+}
+.portrait-img.visible { display: block; opacity: 1; }
+
+.section-label { font-size: 10px; color: #999; margin: 0 0 2px 1px; }
+
+#move-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+#move-buttons button {
+  height: 46px; padding: 0 8px;
+  border-radius: 999px; border: none; color: white;
+  cursor: pointer;
+  --btn-color: #a0a0a0;
+  background: var(--btn-color);
+  box-shadow: inset 0 0 0 2px white, 0 0 0 2px var(--btn-color);
+  text-shadow: 0 1px 2px rgba(0,0,0,.45);
+  transition: filter .15s, transform .1s;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+}
+#move-buttons button:disabled { opacity: .4; cursor: not-allowed; }
+#move-buttons button:not(:disabled):hover  { filter: brightness(1.1); transform: scale(1.04); }
+#move-buttons button:not(:disabled):active { filter: brightness(.9); transform: scale(.97); }
+
+#target-hint {
+  display: none;
+  font-size: 11px; color: #e67e22; text-align: center;
+  padding: 4px; border: 1px dashed #e67e22; border-radius: 6px; margin-top: 2px;
+}
+
+#bag-btn {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; height: 34px;
+  background: transparent; border: 1.5px solid #7a6a50;
+  border-radius: 8px; color: #7a6a50;
+  font-size: 12px; font-family: inherit; font-weight: bold;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+#bag-btn:not(:disabled):hover { background: #7a6a50; color: #fff; border-color: #7a6a50; }
+#bag-btn:not(:disabled):hover svg path { fill: #fff; }
+#bag-btn:disabled { opacity: .35; cursor: not-allowed; }
+#bag-btn svg { flex-shrink: 0; transition: none; }
+
+#forced-switch-hint {
+  display: none;
+  font-size: 11px; color: #e67e22;
+  padding: 4px 8px; border: 1px solid #e67e22; border-radius: 6px;
+}
+#bench-container { display: flex; flex-direction: row; flex-wrap: wrap; gap: 5px; }
+#bench-container button {
+  position: relative; width: 56px; height: 56px;
+  background: transparent; border: none; cursor: pointer; color: #fff;
+  text-shadow: 1px 1px 4px rgba(0,0,0,.9);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; overflow: hidden; box-sizing: border-box;
+}
+#bench-container button::before {
+  content:''; position: absolute; inset: 0;
+  background-image: url('https://regular-azure-qtbkpkmn9y.edgeone.app/%EC%A0%9C%EB%AA%A9%20%EC%97%86%EC%9D%8C-5.png');
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  opacity: .35; transition: opacity .2s; pointer-events: none; z-index: 1;
+}
+#bench-container button:not(:disabled):hover::before { opacity: 1; }
+#bench-container button:disabled { opacity: .5; cursor: not-allowed; }
+.bench-name { font-size: 9px; font-weight: bold; position: relative; z-index: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 85%; }
+.bench-hp   { font-size: 7px; opacity: .85; position: relative; z-index: 0; }
+
+.help-btn { display: flex; flex-direction: column; gap: 4px; }
+#assist-section, #sync-section { display: flex; flex-direction: column; gap: 2px; }
+
+#assist-request-btn {
+  padding: 5px 10px; font-size: 11px; border-radius: 6px;
+  border: 1.5px solid #3498db; background: transparent;
+  color: #3498db; cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+#assist-request-btn:not(:disabled):hover { background: #3498db; color: #fff; }
+#assist-request-btn:disabled { opacity: .5; cursor: not-allowed; }
+#assist-status { font-size: 10px; min-height: 14px; }
+
+#assist-popup {
+  font-size: 11px; padding: 6px 8px;
+  border: 1px solid #e67e22; border-radius: 6px;
+  background: #fff8f0; display: flex; flex-direction: column; gap: 4px;
+}
+#assist-popup-name  { font-weight: bold; }
+#assist-agree-count { font-size: 10px; color: #888; }
+#assist-popup button {
+  padding: 3px 8px; font-size: 11px; border-radius: 4px;
+  border: none; cursor: pointer; font-family: inherit;
+}
+#assist-popup button:first-of-type { background: #27ae60; color: #fff; }
+#assist-popup button:last-of-type  { background: #e74c3c; color: #fff; }
+
+#sync-request-btn {
+  padding: 5px 10px; font-size: 11px; border-radius: 6px;
+  border: 1.5px solid #9b59b6; background: transparent;
+  color: #9b59b6; cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+#sync-request-btn:not(:disabled):hover { background: #9b59b6; color: #fff; }
+#sync-request-btn:disabled { opacity: .5; cursor: not-allowed; }
+#sync-status { font-size: 10px; min-height: 14px; }
+
+#sync-popup {
+  font-size: 11px; padding: 6px 8px;
+  border: 1px solid #9b59b6; border-radius: 6px;
+  background: #f9f0ff; display: flex; flex-direction: column; gap: 4px;
+}
+#sync-popup-name { font-weight: bold; }
+#sync-popup button {
+  padding: 3px 8px; font-size: 11px; border-radius: 4px;
+  border: none; cursor: pointer; font-family: inherit;
+}
+#sync-popup button:first-of-type { background: #27ae60; color: #fff; }
+#sync-popup button:last-of-type  { background: #e74c3c; color: #fff; }
+
+#assist-anim {
+  position: fixed; top: 40%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(40px, 8vw, 72px); font-weight: 900;
+  color: #fff; letter-spacing: 4px;
+  text-shadow: 0 0 10px #00eaff, 0 0 20px #00eaff, 0 0 40px #00eaff;
+  opacity: 0; pointer-events: none; z-index: 9999;
+}
+.assist-show { animation: juicyAssist 1.2s cubic-bezier(.2,1.5,.5,1) forwards; }
+@keyframes juicyAssist {
+  0%   { transform: translate(-50%,-50%) translateX(-500px) scale(0.6) skew(-10deg); opacity: 0; }
+  30%  { transform: translate(-50%,-50%) translateX(0) scale(1.3) skew(-10deg); opacity: 1; }
+  60%  { transform: translate(-50%,-50%) translateX(0) scale(1.2) skew(-10deg); opacity: 1; }
+  100% { transform: translate(-50%,-50%) translateX(0) scale(1.8) skew(-10deg); opacity: 0; }
+}
+#sync-anim {
+  position: fixed; top: 58%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(22px, 4vw, 44px); font-weight: 900;
+  color: #fff; letter-spacing: 3px;
+  text-shadow: 0 0 10px #b44fff, 0 0 20px #b44fff, 0 0 40px #b44fff;
+  opacity: 0; pointer-events: none; z-index: 9999;
+}
+.sync-show { animation: juicySync 1.2s cubic-bezier(.2,1.5,.5,1) forwards; }
+@keyframes juicySync {
+  0%   { transform: translate(-50%,-50%) translateX(-500px) scale(0.6) skew(-10deg); opacity: 0; }
+  30%  { transform: translate(-50%,-50%) translateX(0) scale(1.3) skew(-10deg); opacity: 1; }
+  60%  { transform: translate(-50%,-50%) translateX(0) scale(1.2) skew(-10deg); opacity: 1; }
+  100% { transform: translate(-50%,-50%) translateX(0) scale(1.8) skew(-10deg); opacity: 0; }
+}
+#umbreon-anim {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(36px, 7vw, 68px); font-weight: 900;
+  color: #fff; letter-spacing: 4px;
+  text-shadow: 0 0 10px #1a1a2e, 0 0 20px #9b59b6, 0 0 40px #9b59b6, 2px 2px 0 #000;
+  opacity: 0; pointer-events: none; z-index: 9999;
+}
+.umbreon-show { animation: juicyUmbreon 1.4s cubic-bezier(.2,1.5,.5,1) forwards; }
+@keyframes juicyUmbreon {
+  0%   { transform: translate(-50%,-50%) scale(0.3) rotate(-8deg); opacity: 0; }
+  25%  { transform: translate(-50%,-50%) scale(1.4) rotate(-8deg); opacity: 1; }
+  55%  { transform: translate(-50%,-50%) scale(1.2) rotate(-8deg); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(2.0) rotate(-8deg); opacity: 0; }
+}
+
+.defender-hit { animation: defenderHit 0.35s ease; }
+@keyframes defenderHit {
+  0%  { transform: translateX(0); }
+  20% { transform: translateX(-14px); }
+  45% { transform: translateX(11px); }
+  65% { transform: translateX(-8px); }
+  85% { transform: translateX(5px); }
+  100%{ transform: translateX(0); }
+}
+.blink-damage { animation: blinkDamage .18s steps(1) 3; }
+@keyframes blinkDamage { 0%,100%{opacity:1} 50%{opacity:0} }
+.screen-shake { animation: screenShake 0.3s ease; }
+@keyframes screenShake {
+  0%  { transform: translate(0,0); } 20% { transform: translate(-3px,1px); }
+  40% { transform: translate(3px,-1px); } 60% { transform: translate(-2px,1px); }
+  80% { transform: translate(2px,-1px); } 100%{ transform: translate(0,0); }
+}
+.screen-shake-heavy { animation: screenShakeHeavy 0.9s ease; }
+@keyframes screenShakeHeavy {
+  0%  { transform: translate(0,0) rotate(0deg); }
+  10% { transform: translate(-8px, 4px) rotate(-1deg); }
+  20% { transform: translate(8px, -4px) rotate(1deg); }
+  30% { transform: translate(-6px, 3px) rotate(-0.5deg); }
+  40% { transform: translate(6px, -3px) rotate(0.5deg); }
+  50% { transform: translate(-4px, 2px) rotate(-0.5deg); }
+  60% { transform: translate(4px, -2px) rotate(0deg); }
+  70% { transform: translate(-3px, 1px) rotate(0deg); }
+  80% { transform: translate(3px, -1px) rotate(0deg); }
+  90% { transform: translate(-1px, 1px) rotate(0deg); }
+  100%{ transform: translate(0,0) rotate(0deg); }
+}
+
+#battle-bottom { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+#battle-log {
+  width: 100%; height: 140px; overflow-y: auto;
+  border: 1px solid #444; border-radius: 6px;
+  padding: 8px; font-size: 13px; box-sizing: border-box; line-height: 1.6;
+}
+#battle-log p { margin: 2px 0; }
+#spectator-list { font-size: 11px; color: #888; padding: 4px 6px; }
+
+#leaveBtn {
+  display: none; padding: 7px 16px; margin-top: 4px;
+  background: #c0392b; color: #fff; border: none;
+  border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: bold;
+}
+#leaveBtn:hover { background: #e74c3c; }
+
+#volume-control { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+
+#chat-section,
+#spectator-chat-section {
+  border: 1px solid #ddd; border-radius: 8px;
+  overflow: hidden; display: flex; flex-direction: column;
+  width: 250px; flex-shrink: 0; height: 400px;
+}
+#spectator-chat-section { display: none; }
+
+#chat-channel-label,
+#spectator-channel-label {
+  font-size: 11px; color: #888;
+  padding: 4px 8px; background: #f5f5f5;
+  border-bottom: 1px solid #eee; flex-shrink: 0;
+}
+#spectator-channel-label { color: #7c5cbf; background: #f5f0ff; border-bottom-color: #e8dff8; }
+
+.chat-messages {
+  flex: 1; overflow-y: auto;
+  padding: 5px 8px; font-size: 12px;
+  line-height: 1.5; height: 0; min-height: 0;
+}
+.chat-message { margin: 1px 0; }
+.chat-nick    { font-weight: bold; }
+.chat-message--player .chat-nick { color: #555; }
+.chat-message--player-readonly { opacity: 0.5; }
+.chat-message--player-readonly .chat-nick { color: #2e86c1; }
+.chat-message--spectator .chat-nick { color: #7c5cbf; }
+.chat-action { color: #999; font-style: italic; }
+
+.chat-input-row { display: flex; border-top: 1px solid #eee; flex-shrink: 0; }
+.chat-input {
+  flex: 1; border: none; padding: 5px 8px;
+  font-size: 12px; outline: none; font-family: inherit;
+}
+.chat-send-btn { border: none; color: #fff; padding: 0 12px; cursor: pointer; font-size: 12px; }
+#chat-send-btn       { background: #4caf50; }
+#chat-send-btn:hover { background: #45a049; }
+#spectator-chat-send-btn       { background: #7c5cbf; }
+#spectator-chat-send-btn:hover { background: #6a4eac; }
+
+/* ══ 모바일 ══ */
+@media (max-width: 640px) {
+  body { align-items: flex-start; }
+  #battle-wrapper {
+    border-radius: 0; border-left: none; border-right: none;
+    min-height: 100dvh; width: 100%; max-width: 100%;
+    padding: 8px 6px 24px;
+  }
+  .battle { flex-direction: column; }
+  #chat-section,
+  #spectator-chat-section { width: 100%; height: 160px; }
+
+  .boss-portrait-wrap { width: 90px; height: 90px; }
+  .baby-portrait-wrap { width: 60px; height: 60px; }
+
+  #player-row { grid-template-columns: 1fr; gap: 8px; }
+  #player-cols { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  #center-col {
+    flex-direction: row; justify-content: space-between;
+    align-items: center; flex-wrap: wrap; gap: 6px;
+  }
+  #order-display { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 3px; }
+  .portrait-wrap { width: 64px; height: 64px; }
+  #move-buttons button { height: 44px; font-size: 11px; }
+  #battle-log { height: 90px; font-size: 11px; }
+  .dice-num { font-size: 22px; }
+}
+  </style>
+</head>
+<body>
+
+<div id="assist-anim">ASSIST!</div>
+<div id="sync-anim">SYNCHRONIZE!</div>
+<div id="umbreon-anim">OVERRIDE!</div>
+
+<div id="intro-overlay">
+  <div id="touch-prompt">아무데나 터치하여 시작!</div>
+</div>
+
+<div id="battle-wrapper">
+
+  <!-- ══ 보스 행 ══ -->
+  <div id="boss-row">
+    <div id="boss-row-inner">
+
+      <!-- 포트레이트 묶음: 엄마 왼쪽 | 아기 오른쪽(선택) -->
+      <div id="boss-portraits">
+
+        <!-- 엄마 캥카 / 일반 보스 -->
+        <div class="boss-portrait-block">
+          <p class="boss-label">BOSS</p>
+          <div class="boss-portrait-wrap">
+            <div class="boss-portrait-placeholder"></div>
+            <img id="boss-portrait" class="boss-portrait-img" alt="">
+          </div>
+        </div>
+
+        <!-- 아기 캥카 (has-baby 시 노출) -->
+        <div class="boss-portrait-block" id="baby-portrait-block">
+          <p class="baby-label">BABY</p>
+          <div class="baby-portrait-wrap">
+            <div class="baby-portrait-placeholder"></div>
+            <img id="baby-portrait" class="baby-portrait-img" alt="">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- HP 묶음: 엄마 위 / 아기 아래 -->
+      <div id="boss-hp-stack">
+
+        <!-- 엄마 HP 카드 -->
+        <div class="boss-hp-card">
+          <div class="boss-hp-card-top">
+            <span class="boss-name-label" id="boss-name">—</span>
+            <span class="boss-hp-number"  id="boss-hp-text">—</span>
+          </div>
+          <div class="hp-bar-wrap">
+            <div class="hp-bar" id="boss-hp-bar" style="background:#e74c3c;"></div>
+          </div>
+          <div class="boss-status-tag" id="boss-status"></div>
+          <div class="boss-rank-tag"   id="boss-rank"></div>
+        </div>
+
+        <!-- 아기 HP 카드 (has-baby 시 노출) -->
+        <div class="baby-hp-card" id="baby-hp-card">
+          <div class="baby-hp-card-top">
+            <span class="baby-name-label" id="baby-name">아기 캥카</span>
+            <span class="baby-hp-number"  id="baby-hp-text">—</span>
+          </div>
+          <div class="baby-hp-bar-wrap">
+            <div class="baby-hp-bar" id="baby-hp-bar"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <div class="battle">
+    <div id="battle-screen">
+      <div id="battle-top">
+        <div id="player-row">
+          <div id="player-cols">
+
+            <!-- 내 포켓몬 -->
+            <div class="pkmn-col" id="my-pokemon-area">
+              <p class="section-label" id="my-name-label">-</p>
+              <div class="portrait-wrap">
+                <div class="portrait-placeholder" id="my-portrait-placeholder"></div>
+                <img id="my-portrait" class="portrait-img" alt="">
+              </div>
+              <div class="hp-card my-card">
+                <div class="hp-card-top">
+                  <span class="hp-card-name"  id="my-active-name">-</span>
+                  <span class="hp-card-number" id="my-active-hp"></span>
+                </div>
+                <div class="hp-bar-wrap"><div class="hp-bar" id="my-hp-bar"></div></div>
+              </div>
+              <div>
+                <div id="move-buttons">
+                  <button id="move-btn-0" disabled>-</button>
+                  <button id="move-btn-1" disabled>-</button>
+                  <button id="move-btn-2" disabled>-</button>
+                  <button id="move-btn-3" disabled>-</button>
+                </div>
+                <div id="target-hint">⚔ 공격할 상대를 클릭!</div>
+                <div id="ally-target-popup" style="display:none;margin-top:4px;padding:6px 8px;border:1px dashed #27ae60;border-radius:6px;font-size:11px;color:#27ae60;">
+                  💚 아군을 선택하세요
+                  <div id="ally-target-buttons" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
+                  <button id="ally-target-cancel" style="margin-top:4px;font-size:10px;padding:2px 8px;border:1px solid #aaa;border-radius:4px;background:transparent;cursor:pointer;color:#666;">취소</button>
+                </div>
+              </div>
+              <button id="bag-btn" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+                  <path fill="#7a6a50" d="M17 4.14V2h-3v2h-4V2H7v2.14c-1.72.45-3 2-3 3.86v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.86-1.28-3.41-3-3.86M18 20H6V8c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2zm-1.5-8v4h-2v-2h-7v-2z"/>
+                </svg>
+                가방
+              </button>
+              <div>
+                <p class="section-label">교체</p>
+                <div id="forced-switch-hint">⚠ 교체할 포켓몬을 선택!</div>
+                <div id="bench-container"></div>
+              </div>
+              <button id="leaveBtn">방 나가기</button>
+            </div>
+
+            <!-- 아군1 -->
+            <div class="pkmn-col" id="ally1-pokemon-area">
+              <p class="section-label" id="ally1-name-label">-</p>
+              <div class="portrait-wrap">
+                <div class="portrait-placeholder" id="ally1-portrait-placeholder"></div>
+                <img id="ally1-portrait" class="portrait-img" alt="">
+              </div>
+              <div class="hp-card ally1-card">
+                <div class="hp-card-top">
+                  <span class="hp-card-name"  id="ally1-active-name">-</span>
+                  <span class="hp-card-number" id="ally1-active-hp"></span>
+                </div>
+                <div class="hp-bar-wrap"><div class="hp-bar" id="ally1-hp-bar"></div></div>
+              </div>
+              <div class="help-btn">
+                <div id="assist-section">
+                  <button id="assist-request-btn" onclick="window.__doRequestAssist()">지원 요청</button>
+                  <div id="assist-status"></div>
+                  <div id="assist-popup" style="display:none">
+                    <div><span id="assist-popup-name"></span>님의 지원 요청 <span id="assist-agree-count"></span></div>
+                    <div style="display:flex;gap:4px;">
+                      <button onclick="window.__doAgreeAssist()">동의</button>
+                      <button onclick="window.__doRejectAssist()">거절</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 아군2 -->
+            <div class="pkmn-col" id="ally2-pokemon-area">
+              <p class="section-label" id="ally2-name-label">-</p>
+              <div class="portrait-wrap">
+                <div class="portrait-placeholder" id="ally2-portrait-placeholder"></div>
+                <img id="ally2-portrait" class="portrait-img" alt="">
+              </div>
+              <div class="hp-card ally2-card">
+                <div class="hp-card-top">
+                  <span class="hp-card-name"  id="ally2-active-name">-</span>
+                  <span class="hp-card-number" id="ally2-active-hp"></span>
+                </div>
+                <div class="hp-bar-wrap"><div class="hp-bar" id="ally2-hp-bar"></div></div>
+              </div>
+              <div class="help-btn">
+                <div id="sync-section">
+                  <button id="sync-request-btn" onclick="window.__doRequestSync()">싱크로 요청</button>
+                  <div id="sync-status"></div>
+                  <div id="sync-popup" style="display:none">
+                    <div><span id="sync-popup-name"></span>님의 싱크로 요청</div>
+                    <div style="display:flex;gap:4px;">
+                      <button onclick="window.__doAgreeSync()">동의</button>
+                      <button onclick="window.__doRejectSync()">거절</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /player-cols -->
+
+          <!-- 가운데 -->
+          <div id="center-col">
+            <div id="turn-area">
+              <div id="turn-display">대기 중...</div>
+              <div id="turn-count"></div>
+            </div>
+            <div id="order-display"></div>
+            <div id="dice-wrap">
+              <div class="dice-row">
+                <div class="dice-box" id="dice-box-p1">
+                  <span id="p1-dice-label">P1</span>
+                  <div class="dice-num" id="dice-p1">?</div>
+                </div>
+                <div class="dice-box" id="dice-box-p2">
+                  <span id="p2-dice-label">P2</span>
+                  <div class="dice-num" id="dice-p2">?</div>
+                </div>
+              </div>
+              <div class="dice-row">
+                <div class="dice-box" id="dice-box-p3">
+                  <span id="p3-dice-label">P3</span>
+                  <div class="dice-num" id="dice-p3">?</div>
+                </div>
+                <div class="dice-box" id="dice-box-boss">
+                  <span id="boss-dice-label">BOSS</span>
+                  <div class="dice-num" id="dice-boss">?</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /player-row -->
+      </div><!-- /battle-top -->
+
+      <div id="battle-bottom">
+        <p class="section-label">배틀 로그</p>
+        <div id="battle-log"></div>
+        <div id="spectator-list"></div>
+        <div id="volume-control">
+          <span style="font-size:11px;color:#999;">🎵</span>
+          <input type="range" id="bgm-volume" min="0" max="1" step="0.05" value="0.7"
+            style="flex:1;accent-color:#555;cursor:pointer;">
+          <span id="bgm-volume-label" style="font-size:11px;color:#999;min-width:28px;">70%</span>
+        </div>
+      </div>
+
+    </div><!-- /battle-screen -->
+
+    <!-- 플레이어 채팅 -->
+    <div id="chat-section">
+      <div id="chat-channel-label">🗡 레이드 채팅</div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chat-input" type="text" placeholder="동료에게..." maxlength="200">
+        <button class="chat-send-btn" id="chat-send-btn">전송</button>
+      </div>
+    </div>
+
+    <!-- 관전자 채팅 -->
+    <div id="spectator-chat-section">
+      <div style="font-size:11px;color:#2e86c1;padding:4px 8px;background:#f0f6ff;border-bottom:1px solid #dce8f8;flex-shrink:0;">🗡 플레이어 채팅</div>
+      <div class="chat-messages" id="spectator-player-messages" style="flex:none;height:160px;border-bottom:1px solid #eee;"></div>
+      <div id="spectator-channel-label">관전자 채팅</div>
+      <div class="chat-messages" id="spectator-chat-messages"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="spectator-chat-input" type="text" placeholder="관전자 채팅..." maxlength="200">
+        <button class="chat-send-btn" id="spectator-chat-send-btn">전송</button>
+      </div>
+    </div>
+
+  </div><!-- /battle -->
+</div><!-- /battle-wrapper -->
+
+<script>const ROOM_ID = "raidroom2"</script>
+<script type="module" src="../js/raidchat.js"></script>
+<script type="module" src="../js/raidintro.js"></script>
+<script type="module" src="../js/raid.js"></script>
+</body>
+</html>
