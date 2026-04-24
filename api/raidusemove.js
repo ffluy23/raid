@@ -1570,6 +1570,7 @@ export default async function handler(req, res) {
                     if (m.includes("상태")) data.boss_status = moveInfo.effect?.status ?? null
                     logEntries.push(makeLog("normal", m))
                   })
+                  data.boss_rank = fakeBoss.ranks ?? data.boss_rank
                   if (moveInfo?.hyperBeam) myPkmn.hyperBeamState = true
                   if (moveInfo?.uTurn) {
                     const canSwitch = (entries[mySlot] ?? []).some((p, i) => i !== myActiveIdx && p.hp > 0)
