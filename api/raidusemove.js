@@ -1253,6 +1253,12 @@ export default async function handler(req, res) {
           if (moveInfo?.targetSelf === false && fakeBoss.status !== (data.boss_status ?? null)) {
             data.boss_status = fakeBoss.status
           }
+          if (moveInfo?.targetSelf === false && (fakeBoss.confusion ?? 0) > 0) {
+  data.boss_volatile = {
+    ...(data.boss_volatile ?? {}),
+    confused: fakeBoss.confusion
+  }
+}
         }
 
       } else {
