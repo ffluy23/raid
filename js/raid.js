@@ -66,7 +66,8 @@ const TYPE_COLORS = {
   "노말":"#949495","불":"#e56c3e","물":"#5185c5","전기":"#fbb917","풀":"#66a945",
   "얼음":"#6dc8eb","격투":"#e09c40","독":"#735198","땅":"#9c7743","바위":"#bfb889",
   "비행":"#a2c3e7","에스퍼":"#dd6b7b","벌레":"#9fa244","고스트":"#684870",
-  "드래곤":"#535ca8","악":"#4c4948","강철":"#69a9c7","페어리":"#dab4d4"
+  "드래곤":"#535ca8","악":"#4c4948","강철":"#69a9c7","페어리":"#dab4d4",
+  "불꽃":"#e56c3e"
 }
 
 let lastTurnSlot = null
@@ -102,7 +103,7 @@ const SPECTATOR_PREFIX = { p1: "my", p2: "ally1", p3: "ally2" }
 
 function slotToPrefix(slot) {
   if (slot === "boss") return "boss"
-  if (isBeedrillSlot(slot)) return null  // 독침붕은 별도 UI
+  if (isBeedrillSlot(slot)) return null
   if (!mySlot) return SPECTATOR_PREFIX[slot] ?? null
   if (slot === mySlot) return "my"
   const others = otherPlayerSlots()
@@ -173,7 +174,6 @@ function updateBossUI(data) {
 
   updateHpBar("boss-hp-bar", "boss-hp-text", bossHp, bossMaxHp, true)
 
-  // 보스 포트레이트
   const img = $("boss-portrait")
   const ph  = document.querySelector(".boss-portrait-placeholder")
   if (img) {
@@ -208,6 +208,80 @@ function updateBossUI(data) {
     else if ((rank.def ?? 0) < 0) tags.push(`방${rank.def}`)
     rankEl.innerText = tags.join(" / ")
   }
+
+  // ── 아기 캥카 UI ──────────────────────────────────────────────────
+  updateBabyBossUI(data)
+}
+
+// ── 아기 캥카 UI ──────────────────────────────────────────────────────
+function updateBabyBossUI(data) {
+  const baby    = data.boss_baby ?? null
+  const bossRow = $("boss-row")
+  if (!bossRow) return
+
+  // boss_baby 필드가 없으면 has-baby 클래스 제거하고 종료
+  if (!baby) {
+    bossRow.classList.remove("has-baby")
+    return
+  }
+
+  // 아기 캥카 등장: has-baby 클래스 추가
+  bossRow.classList.add("has-baby")
+
+  // 이름
+  const nameEl = $("baby-name")
+  if (nameEl) nameEl.innerText = baby.name ?? "아기 캥카"
+
+  // HP바 + 텍스트
+  const hp    = baby.hp    ?? 0
+  const maxHp = baby.maxHp ?? 1
+  const pct   = maxHp > 0 ? Math.max(0, Math.min(100, hp / maxHp * 100)) : 0
+  const hpBar = $("baby-hp-bar")
+  const hpTxt = $("baby-hp-text")
+  if (hpBar) {
+    hpBar.style.width           = `${pct}%`
+    hpBar.style.backgroundColor = pct > 50 ? "#e67e22" : pct > 20 ? "#e74c3c" : "#c0392b"
+  }
+  if (hpTxt) hpTxt.innerText = `HP: ${hp} / ${maxHp}`
+
+  // 쓰러짐 스타일
+  const card = $("baby-hp-card")
+  if (card) card.classList.toggle("fainted", hp <= 0)
+
+  // 포트레이트
+  const babyImg = $("baby-portrait")
+  const babyPh  = document.querySelector(".baby-portrait-placeholder")
+  if (babyImg) {
+    const portrait = baby.portrait ?? null
+    if (!portrait) {
+      babyImg.classList.remove("visible"); babyImg.style.display = "none"
+      if (babyPh) babyPh.style.display = "block"
+    } else if (babyImg.dataset.loadedSrc !== portrait) {
+      babyImg.dataset.loadedSrc = portrait
+      if (babyPh) babyPh.style.display = "none"
+      babyImg.classList.remove("visible")
+      babyImg.style.display = "block"
+      babyImg.src = portrait
+      babyImg.alt = baby.name ?? "아기 캥카"
+      setTimeout(() => babyImg.classList.add("visible"), 60)
+    }
+  }
+}
+
+// ── 아기 캥카 HP 애니메이션 ──────────────────────────────────────────
+function animateBabyHpBar(targetHp, maxHp) {
+  return new Promise(resolve => {
+    const hpBar = $("baby-hp-bar")
+    const hpTxt = $("baby-hp-text")
+    if (!hpBar) { resolve(); return }
+    const pct   = maxHp > 0 ? Math.max(0, Math.min(100, targetHp / maxHp * 100)) : 0
+    const color = pct > 50 ? "#e67e22" : pct > 20 ? "#e74c3c" : "#c0392b"
+    hpBar.style.transition      = "width 0.4s ease, background-color 0.4s ease"
+    hpBar.style.width           = `${pct}%`
+    hpBar.style.backgroundColor = color
+    if (hpTxt) hpTxt.innerText  = `HP: ${targetHp} / ${maxHp}`
+    setTimeout(() => { hpBar.style.transition = ""; resolve() }, 420)
+  })
 }
 
 // ── 독침붕 UI ────────────────────────────────────────────────────────
@@ -264,12 +338,12 @@ function enterBeedrillTargetMode(data) {
     const card = $(`beedrill-card-${i}`)
     if (!card || bee.hp <= 0) return
     card.classList.add("targetable")
-   card.onclick = () => {
-  const idx = pendingMoveIdx
-  exitBeedrillTargetMode(data)
-  actionDone = false
-  doUseMove(idx, [`beedrill_${i}`], data)
-}
+    card.onclick = () => {
+      const idx = pendingMoveIdx
+      exitBeedrillTargetMode(data)
+      actionDone = false
+      doUseMove(idx, [`beedrill_${i}`], data)
+    }
   })
 }
 
@@ -308,7 +382,6 @@ function triggerAutoAction(data) {
   const { mv, i: moveIdx } = usable[Math.floor(Math.random() * usable.length)]
   const moveInfo = moves[mv.name] ?? {}
 
-  // 독침붕 살아있으면 독침붕 랜덤 타겟
   if (anyBeedrillAlive(data)) {
     const aliveBees = (data.Beedrill ?? [])
       .map((b, i) => ({ b, i }))
@@ -325,7 +398,6 @@ function triggerAutoAction(data) {
     doUseMove(moveIdx, ["boss"], data); return
   }
 
-    // 도우미 자동발동: 랜덤 생존 아군
   if (moveInfo.helper) {
     const aliveAllies = otherPlayerSlots().filter(s => {
       const aIdx = data[`${s}_active_idx`] ?? 0
@@ -345,7 +417,7 @@ function triggerAutoAction(data) {
     || moveInfo.taunt || moveInfo.memento || moveInfo.leechSeed || moveInfo.chainBind
     || moveInfo.poisonPowder || moveInfo.pollenPuff || moveInfo.curse
     || (moveInfo.effect?.volatile && !moveInfo.targetSelf)
-    || (moveInfo.effect?.status && moveInfo.targetSelf === false) || moveInfo.helper 
+    || (moveInfo.effect?.status && moveInfo.targetSelf === false) || moveInfo.helper
 
   doUseMove(moveIdx, needsTarget ? ["boss"] : [], data)
 }
@@ -370,8 +442,15 @@ async function handleLogEntry(entry) {
     }
     case "hit": {
       if (!meta?.defender) break
-      if (isBeedrillSlot(meta.defender)) {
-        // 독침붕 피격 이펙트
+      if (meta.defender === "boss_baby") {
+        // 아기 캥카 피격 이펙트
+        const babyArea = $("baby-boss-area")
+        if (babyArea) {
+          babyArea.classList.remove("defender-hit"); void babyArea.offsetWidth
+          babyArea.classList.add("defender-hit")
+          await new Promise(r => babyArea.addEventListener("animationend", r, { once: true }))
+        }
+      } else if (isBeedrillSlot(meta.defender)) {
         const card = $(`beedrill-card-${meta.defender.replace("beedrill_", "")}`)
         if (card) {
           card.classList.remove("defender-hit"); void card.offsetWidth
@@ -386,8 +465,13 @@ async function handleLogEntry(entry) {
     }
     case "hp": {
       if (!meta?.slot) break
-      if (isBeedrillSlot(meta.slot)) {
-        // 독침붕 HP 애니메이션
+      if (meta.slot === "boss_baby") {
+        // 아기 캥카 HP 애니메이션
+        await animateBabyHpBar(meta.hp, meta.maxHp)
+        const card = $("baby-hp-card")
+        if (card) card.classList.toggle("fainted", meta.hp <= 0)
+        if (text) await typeText(logEl, text)
+      } else if (isBeedrillSlot(meta.slot)) {
         const idx    = parseInt(meta.slot.replace("beedrill_", ""), 10)
         const hpBar  = $(`beedrill-hp-bar-${idx}`)
         const hpNum  = $(`beedrill-hp-num-${idx}`)
@@ -410,13 +494,11 @@ async function handleLogEntry(entry) {
       break
     }
     case "beedrill_summon": {
-      // 소환 로그 — UI는 pendingRoomData applyRoomData에서 처리
       if (text) await typeText(logEl, text)
       await wait(200)
       break
     }
     case "beedrill_hp": {
-      // 독침붕 전체 HP 갱신 (방어지령/회복지령 후)
       if (meta?.beedrills) {
         meta.beedrills.forEach((bee, i) => {
           const hpBar = $(`beedrill-hp-bar-${i}`)
@@ -449,7 +531,13 @@ async function handleLogEntry(entry) {
     case "faint": {
       if (text) await typeText(logEl, text)
       if (meta?.slot) {
-        if (isBeedrillSlot(meta.slot)) {
+        if (meta.slot === "boss_baby") {
+          // 아기 캥카 쓰러짐
+          const card    = $("baby-hp-card")
+          const babyImg = $("baby-portrait")
+          if (card)    card.classList.add("fainted")
+          if (babyImg) babyImg.style.opacity = "0.35"
+        } else if (isBeedrillSlot(meta.slot)) {
           const idx  = parseInt(meta.slot.replace("beedrill_", ""), 10)
           const card = $(`beedrill-card-${idx}`)
           if (card) card.classList.add("fainted")
@@ -500,9 +588,6 @@ async function processLogQueue() {
           lastDiceEventTs = data.dice_event.ts
           await animateRoundDice(data.dice_event.rolls, data.dice_event.slots)
         }
-
-        
-
         applyRoomData(data)
       }, 80)
     }
@@ -725,17 +810,14 @@ function updateMoveButtons(data) {
 function onMoveClick(idx, moveInfo, data) {
   if (actionDone) return
 
-   // ── 치유파동: 아군 선택 팝업 ──
+  // ── 치유파동: 아군 선택 팝업 ──
   if (moveInfo?.healPulse) {
     const aliveAllies = otherPlayerSlots().filter(s => {
       const aIdx = data[`${s}_active_idx`] ?? 0
       const p    = data[`${s}_entry`]?.[aIdx]
       return p && p.hp > 0
     })
-    if (aliveAllies.length === 0) {
-      doUseMove(idx, [], data)
-      return
-    }
+    if (aliveAllies.length === 0) { doUseMove(idx, [], data); return }
     const popup     = $("ally-target-popup")
     const btnWrap   = $("ally-target-buttons")
     const cancelBtn = $("ally-target-cancel")
@@ -755,7 +837,7 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
-  // ── 꽃가루경단: 아군 선택 팝업 먼저 ──
+  // ── 꽃가루경단: 아군/적 선택 팝업 ──
   if (moveInfo?.pollenPuff) {
     const aliveAllies = otherPlayerSlots().filter(s => {
       const aIdx = data[`${s}_active_idx`] ?? 0
@@ -768,7 +850,6 @@ function onMoveClick(idx, moveInfo, data) {
       const cancelBtn = $("ally-target-cancel")
       if (!popup || !btnWrap) { doUseMove(idx, ["boss"], data); return }
       btnWrap.innerHTML = ""
-      // 아군 버튼들
       aliveAllies.forEach(s => {
         const aIdx = data[`${s}_active_idx`] ?? 0
         const p    = data[`${s}_entry`]?.[aIdx]
@@ -778,7 +859,6 @@ function onMoveClick(idx, moveInfo, data) {
         btn.onclick = () => { popup.style.display = "none"; doUseMove(idx, [s], data) }
         btnWrap.appendChild(btn)
       })
-      // 적 타겟(보스/독침붕) 버튼
       const enemyBtn = document.createElement("button")
       enemyBtn.textContent = anyBeedrillAlive(data) ? "독침붕" : "보스"
       enemyBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #e74c3c;background:#e74c3c;color:#fff;cursor:pointer;font-size:11px;"
@@ -802,24 +882,18 @@ function onMoveClick(idx, moveInfo, data) {
       popup.style.display = "block"
       return
     }
-    // 아군 없으면 바로 적 타겟
   }
 
-
-  // ── [PATCH] 도우미: 아군 타겟 선택 팝업 ──
+  // ── 도우미: 아군 타겟 선택 팝업 ──
   if (moveInfo?.helper) {
     const aliveAllies = otherPlayerSlots().filter(s => {
       const aIdx = data[`${s}_active_idx`] ?? 0
       const p    = data[`${s}_entry`]?.[aIdx]
       return p && p.hp > 0
     })
-    if (aliveAllies.length === 0) {
-      doUseMove(idx, [], data)
-      return
-    }
-    // 팝업 표시
-    const popup    = $("ally-target-popup")
-    const btnWrap  = $("ally-target-buttons")
+    if (aliveAllies.length === 0) { doUseMove(idx, [], data); return }
+    const popup     = $("ally-target-popup")
+    const btnWrap   = $("ally-target-buttons")
     const cancelBtn = $("ally-target-cancel")
     if (!popup || !btnWrap) { doUseMove(idx, [], data); return }
     btnWrap.innerHTML = ""
@@ -829,10 +903,7 @@ function onMoveClick(idx, moveInfo, data) {
       const btn  = document.createElement("button")
       btn.textContent = p?.name ?? s
       btn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #27ae60;background:#27ae60;color:#fff;cursor:pointer;font-size:11px;"
-      btn.onclick = () => {
-        popup.style.display = "none"
-        doUseMove(idx, [s], data)
-      }
+      btn.onclick = () => { popup.style.display = "none"; doUseMove(idx, [s], data) }
       btnWrap.appendChild(btn)
     })
     cancelBtn.onclick = () => { popup.style.display = "none" }
@@ -842,7 +913,7 @@ function onMoveClick(idx, moveInfo, data) {
 
   const hasBeedrills = anyBeedrillAlive(data)
 
-  // aoe 기술: 독침붕 있으면 독침붕 전원, 없으면 보스
+  // aoe 기술
   if (moveInfo?.aoe || moveInfo?.aoeEnemy) {
     doUseMove(idx, hasBeedrills ? [] : ["boss"], data)
     return
@@ -850,7 +921,6 @@ function onMoveClick(idx, moveInfo, data) {
 
   if (moveInfo?.outrage) {
     if (hasBeedrills) {
-      // 역린 → 독침붕 랜덤
       const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
       const { i: bIdx } = aliveBees[Math.floor(Math.random() * aliveBees.length)]
       doUseMove(idx, [`beedrill_${bIdx}`], data)
@@ -860,33 +930,33 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
- const r = moveInfo?.rank
-const targetsEnemy =
-  !moveInfo?.teamBoost &&
-  (moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
-  || moveInfo?.taunt || moveInfo?.memento
-  || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
-  || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
-  || moveInfo?.dragonTail || moveInfo?.poisonPowder
-  || moveInfo?.pollenPuff || moveInfo?.curse
-  || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
-  || (moveInfo?.effect?.status && moveInfo?.targetSelf === false))
+  const r = moveInfo?.rank
+  const targetsEnemy =
+    !moveInfo?.teamBoost &&
+    (moveInfo?.power || moveInfo?.ghostDive || moveInfo?.futureSight
+    || moveInfo?.taunt || moveInfo?.memento
+    || (r && (r.targetAtk !== undefined || r.targetDef !== undefined || r.targetSpd !== undefined))
+    || moveInfo?.roar || moveInfo?.leechSeed || moveInfo?.chainBind
+    || moveInfo?.dragonTail || moveInfo?.poisonPowder
+    || moveInfo?.pollenPuff || moveInfo?.curse
+    || (moveInfo?.effect?.volatile && !moveInfo?.targetSelf)
+    || (moveInfo?.effect?.status && moveInfo?.targetSelf === false))
 
   if (!targetsEnemy) {
-    // 자기/아군 대상 기술 → 독침붕 관계없이 그냥 사용
     doUseMove(idx, [], data)
     return
   }
 
-  // 공격 기술인데 독침붕이 살아있음 → 독침붕 타겟 선택
+  // ── 아기 캥카 타겟 선택 (1페이즈, 독침붕 없을 때) ──
+  const hasBaby     = !!(data.boss_baby && (data.boss_baby.hp ?? 0) > 0)
+  const bossPhase   = data.boss_state?.phase ?? 1
+
   if (hasBeedrills) {
     const aliveBees = (data.Beedrill ?? []).filter(b => b.hp > 0)
     if (aliveBees.length === 1) {
-      // 살아있는 독침붕이 1마리면 바로
       const bIdx = (data.Beedrill ?? []).findIndex(b => b.hp > 0)
       doUseMove(idx, [`beedrill_${bIdx}`], data)
     } else {
-      // 2마리 다 살아있으면 선택 모드
       pendingMoveIdx  = idx
       pendingMoveInfo = moveInfo
       enterBeedrillTargetMode(data)
@@ -894,8 +964,46 @@ const targetsEnemy =
     return
   }
 
-  // 독침붕 없으면 보스
+  // 독침붕 없고 1페이즈이고 아기 캥카 살아있으면 타겟 선택 팝업
+  if (!hasBeedrills && hasBaby && bossPhase === 1) {
+    showBossTargetPopup(idx, moveInfo, data)
+    return
+  }
+
   doUseMove(idx, ["boss"], data)
+}
+
+// ── 보스 타겟 선택 팝업 (엄마/아기 캥카 선택) ────────────────────────
+function showBossTargetPopup(idx, moveInfo, data) {
+  const popup     = $("ally-target-popup")
+  const btnWrap   = $("ally-target-buttons")
+  const cancelBtn = $("ally-target-cancel")
+  if (!popup || !btnWrap) { doUseMove(idx, ["boss"], data); return }
+
+  btnWrap.innerHTML = ""
+
+  // 엄마 캥카 버튼
+  const momBtn = document.createElement("button")
+  momBtn.textContent = data.boss_name ?? "엄마 캥카"
+  momBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #e74c3c;background:#e74c3c;color:#fff;cursor:pointer;font-size:11px;"
+  momBtn.onclick = () => { popup.style.display = "none"; doUseMove(idx, ["boss"], data) }
+  btnWrap.appendChild(momBtn)
+
+  // 아기 캥카 버튼
+  const babyBtn = document.createElement("button")
+  babyBtn.textContent = data.boss_baby?.name ?? "아기 캥카"
+  babyBtn.style.cssText = "padding:3px 10px;border-radius:6px;border:1px solid #e67e22;background:#e67e22;color:#fff;cursor:pointer;font-size:11px;"
+  babyBtn.onclick = () => { popup.style.display = "none"; doUseMove(idx, ["boss_baby"], data) }
+  btnWrap.appendChild(babyBtn)
+
+  cancelBtn.onclick = () => { popup.style.display = "none" }
+
+  // 팝업 라벨 임시 변경
+  const popupEl = popup.querySelector("div:first-child")
+  if (popupEl) popupEl.textContent = "⚔ 공격 대상을 선택하세요"
+  popup.style.borderColor = "#e74c3c"
+  popup.style.color = "#e74c3c"
+  popup.style.display = "block"
 }
 
 async function doUseMove(moveIdx, targetSlots, data) {
@@ -1183,7 +1291,7 @@ function applyRoomData(data) {
   currentRoomData = data
 
   PLAYER_SLOTS.forEach(s => updateSlotUI(s, data))
-  updateBossUI(data)
+  updateBossUI(data)   // 내부에서 updateBabyBossUI 호출
   updateBeedrillUI(data)
   updateOrderDisplay(data)
   updateTurnUI(data)
@@ -1221,7 +1329,7 @@ function listenLogs(gameStartedAt) {
   })
 }
 
-let lastDiceEventTs = 0
+let lastDiceEventTs   = 0
 let lastAssistEventTs = 0
 let lastSyncEventTs   = 0
 
@@ -1243,7 +1351,6 @@ function listenRoom() {
       if (!wasMyTurn && isMyTurnNow) {
         actionDone = false
         closeItemModal()
-        // 타겟 선택 모드 해제
         if (beedrillTargetMode) exitBeedrillTargetMode(data)
       }
 
@@ -1264,7 +1371,6 @@ function listenRoom() {
               .findIndex(m => m.name === myActivePkmn.outrageState.moveName)
             if (outrageMoveIdx !== -1) {
               actionDone = true
-              // 역린도 독침붕 우선
               const hasBees = anyBeedrillAlive(data)
               let tSlots = ["boss"]
               if (hasBees) {
@@ -1284,7 +1390,6 @@ function listenRoom() {
           const needsAutoDive = myActivePkmn?.ghostDiveState?.diving
           if (!actionDone && (needsAutoMove || needsAutoFly || needsAutoDig || needsAutoDive || myActivePkmn?.hyperBeamState)) {
             actionDone = true
-            // 자동처리 기술도 독침붕 우선
             const hasBees = anyBeedrillAlive(data)
             let tSlots = ["boss"]
             if (hasBees) {
@@ -1327,8 +1432,6 @@ function listenRoom() {
     }
 
     if (!isProcessing && logQueue.length === 0) {
-
-
       applyRoomData(data)
     } else {
       pendingRoomData = data
