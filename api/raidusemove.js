@@ -312,7 +312,16 @@ function trackDealCheck(data, mySlot, dmg) {
   if (dmg <= 0) return
   data[`${mySlot}_total_damage`] = (data[`${mySlot}_total_damage`] ?? 0) + dmg
   data.boss_last_attacker = mySlot
+
   if (data.boss_state?.dealCheckActive) {
+    data.boss_state = {
+      ...data.boss_state,
+      dealCheckDmg: (data.boss_state.dealCheckDmg ?? 0) + dmg,
+    }
+    return
+  }
+
+  if (data.boss_state?.corruptedSlot) {
     data.boss_state = {
       ...data.boss_state,
       dealCheckDmg: (data.boss_state.dealCheckDmg ?? 0) + dmg,
@@ -1031,10 +1040,14 @@ export default async function handler(req, res) {
           myPkmn.enduring = true
           logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 버티기 태세에 들어갔다!`))
           specialHandled = true
-        } else if (moveInfo?.amulet) {
-          myPkmn.amuletTurns = 3
-          logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 신비의 부적으로 몸을 감쌌다!`))
-          specialHandled = true
+       } else if (moveInfo?.amulet) {
+  if (myPkmn.corrupted) {
+    logEntries.push(makeLog("normal", "부식은 제거되지 않는다! 더스트나의 오염이 깊게 스며들어 있다…"))
+  } else {
+    myPkmn.amuletTurns = 3
+    logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 신비의 부적으로 몸을 감쌌다!`))
+  }
+  specialHandled = true
         } else if (moveInfo?.wish) {
           myPkmn.wishTurns = 2
           logEntries.push(makeLog("normal", `${myPkmn.name}${josa(myPkmn.name, "은는")} 희망사항을 빌었다!`))
@@ -1481,6 +1494,12 @@ export default async function handler(req, res) {
                   data.boss_current_hp = Math.max(0, (data.boss_current_hp ?? 0) - finalDmg)
                   // ── [추가] 누리레느 딜체크 누적 ──────────────
                   trackDealCheck(data, mySlot, finalDmg)
+
+                  // 더스트나 분노 체크
+                  if (data.boss_state?.corruptionExploded && finalDmg > 0) {
+                    logEntries.push(makeLog("normal", "더스트나가 분노했다!"))
+                    data.boss_state = { ...data.boss_state, corruptionExploded: false }
+                  }
 
                   logEntries.push(makeLog("hit", "", { defender: "boss" }))
                   logEntries.push(makeLog("hp",  "", { slot: "boss", hp: data.boss_current_hp, maxHp: data.boss_max_hp }))
