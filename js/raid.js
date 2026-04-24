@@ -911,6 +911,8 @@ function onMoveClick(idx, moveInfo, data) {
     return
   }
 
+  const hasBeedrills = anyBeedrillAlive(data)
+
   if (moveInfo?.uTurn) {
   if (hasBeedrills) {
     const aliveBees = (data.Beedrill ?? []).map((b,i) => ({b,i})).filter(({b}) => b.hp > 0)
@@ -927,7 +929,7 @@ function onMoveClick(idx, moveInfo, data) {
   return
 }
 
-  const hasBeedrills = anyBeedrillAlive(data)
+
 
   // aoe 기술
   if (moveInfo?.aoe || moveInfo?.aoeEnemy) {
